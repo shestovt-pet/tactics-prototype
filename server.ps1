@@ -6,7 +6,7 @@ Write-Host "Serving $root on http://localhost:8080/"
 while ($listener.IsListening) {
   $context = $listener.GetContext()
   $path = $context.Request.Url.LocalPath.TrimStart('/')
-  if ([string]::IsNullOrEmpty($path)) { $path = "tactics.html" }
+  if ([string]::IsNullOrEmpty($path)) { $path = "index.html" }
   $file = Join-Path $root $path
   if (Test-Path $file -PathType Leaf) {
     $bytes = [System.IO.File]::ReadAllBytes($file)

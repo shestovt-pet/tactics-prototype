@@ -1,0 +1,59 @@
+<meta charset="utf-8">
+<title>Каталог прототипов</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; padding: 40px 20px 60px;
+    background: radial-gradient(1200px 700px at 50% -10%, #23283f, #0c0e18 60%); color: #e8e8f0;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  .head { max-width: 900px; margin: 0 auto 28px; }
+  h1 { margin: 0 0 6px; font-weight: 700; letter-spacing: 3px; font-size: 26px;
+       background: linear-gradient(90deg,#ffcf4d,#ff8a4d); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .sub { opacity: .6; font-size: 14px; line-height: 1.6; }
+  .grid { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+  .card { background: #161a2c; border: 1px solid #2a2f4a; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
+          transition: border-color .15s, transform .1s; }
+  .card:hover { border-color: #4a5178; }
+  .card h2 { margin: 0; font-size: 18px; font-weight: 700; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: #232748; color: #aeb7e6; letter-spacing: .3px; }
+  .tag.now { background: #2e2a12; color: #ffcf4d; }
+  .tag.arch { background: #201f2c; color: #8a90b8; }
+  .desc { font-size: 13.5px; line-height: 1.6; opacity: .88; }
+  .try { font-size: 12.5px; line-height: 1.55; opacity: .7; border-left: 2px solid #3a3f6a; padding-left: 10px; }
+  .try b { color: #8fe3ff; font-weight: 600; }
+  .ctrl { font-size: 12px; opacity: .55; }
+  a.open { margin-top: auto; text-align: center; text-decoration: none; padding: 11px; border-radius: 9px;
+           background: #ffcf4d; color: #2a1e00; font-weight: 700; font-size: 14px; }
+  a.open:hover { filter: brightness(1.08); }
+  a.open.ghost { background: #232748; color: #cfd2f0; }
+  .foot { max-width: 900px; margin: 26px auto 0; font-size: 12px; opacity: .45; line-height: 1.6; }
+</style>
+
+<div class="head">
+  <h1>КАТАЛОГ ПРОТОТИПОВ</h1>
+  <div class="sub">Выбери прототип и открой его, чтобы пощупать. Новые версии и эксперименты будут появляться здесь же.</div>
+</div>
+
+<div class="grid">
+
+  <div class="card">
+    <h2>Боевой стенд · реакционный ближний бой</h2>
+    <div class="tags"><span class="tag now">текущий</span><span class="tag">без клеток</span><span class="tag">ближний бой</span><span class="tag">реакции</span></div>
+    <div class="desc">Ближний бой в свободном пространстве, без сетки. Каждый ход — один <b>весомый</b> удар (с замиранием кадра, тряской и вспышкой). Всё непотраченное превращается во <b>внимание</b>: между ходами оно держит лицо к врагу, слегка кружит и питает мелкие тычки. Удар <b>оглушает</b> — сбивает внимание и открывает спину.</div>
+    <div class="try">Попробуй: подойди и руби (должно «щёлкнуть»); зайди со <b>спины</b> — бонус и полные тычки; потрать всё внимание в атаку и увидишь, как тебя начинают клевать в открытую спину. Справа — крутилки параметров.</div>
+    <div class="ctrl">Клик по земле — шаг · клик по врагу вплотную — удар · «Завершить ход раньше» — приберечь внимание.</div>
+    <a class="open" href="combat-bench.html">Открыть →</a>
+  </div>
+
+  <div class="card">
+    <h2>Тактика · изометрия, отряд, умения</h2>
+    <div class="tags"><span class="tag arch">архив</span><span class="tag">клетки</span><span class="tag">отряд</span><span class="tag">умения</span></div>
+    <div class="desc">Пошаговый тактический бой на изометрической сетке 32×32 с прокруткой. Ты ведёшь протагониста в отряде; у каждого бойца по <b>3 умения</b> (у тебя 6): удар, мощный удар, рывок, метнуть топор, оборона, клич. Есть препятствия и линия огня, вражеский <b>Вожак</b> с приказами, и диалоги с юнитами (похвала, приказы, насмешки).</div>
+    <div class="try">Попробуй: наведи мышь на любого юнита — покажет его умения; раздрази лучника, чтобы он бросился на героя мимо приказа Вожака; кликни по реплике над бойцом — открой диалог.</div>
+    <div class="ctrl">Клик по клеткам — ходить · панель умений снизу · тащить/стрелки — камера · клик по реплике — диалог.</div>
+    <a class="open ghost" href="tactics.html">Открыть →</a>
+  </div>
+
+</div>
+
+<div class="foot">Это направление мы отложили в пользу боевого стенда, но оставили в каталоге — как отдельная ветка идей.</div>
