@@ -1,0 +1,370 @@
+<meta charset="utf-8">
+<title>Тактика — прототип</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; padding: 16px;
+    background: radial-gradient(1200px 600px at 50% -10%, #23283f, #0c0e18 60%);
+    color: #e8e8f0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; user-select: none;
+  }
+  h1 { margin: 0; font-weight: 700; letter-spacing: 3px; font-size: 22px;
+       background: linear-gradient(90deg,#ffcf4d,#ff8a4d); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .wrap { display: flex; gap: 16px; align-items: flex-start; }
+  canvas { background: #0a0c16; border: 1px solid #2a2f4a; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .side { width: 260px; display: flex; flex-direction: column; gap: 10px; }
+  .box { background: #161a2c; border: 1px solid #2a2f4a; border-radius: 10px; padding: 10px 12px; }
+  .lbl { font-size: 11px; opacity: .55; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .turn { font-size: 15px; font-weight: 700; }
+  .turn small { font-weight: 400; opacity: .6; }
+  .order { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  .order li { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; margin-bottom: 2px; }
+  .order li.active { background: #2a2f4a; }
+  .order li.dead { opacity: .3; text-decoration: line-through; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+  .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hp { font-variant-numeric: tabular-nums; opacity: .8; font-size: 12px; }
+  .log { height: 150px; overflow-y: auto; font-size: 12.5px; line-height: 1.6; display: flex; flex-direction: column-reverse; }
+  .log div { padding: 1px 0; border-bottom: 1px solid #1e2338; }
+  .btns { display: flex; gap: 8px; }
+  button { flex: 1; padding: 10px 0; font-size: 14px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; }
+  button:active { transform: translateY(1px); }
+  .btn-primary { background: #ffcf4d; color: #2a1e00; }
+  .btn-ghost { background: #232748; color: #cfd2f0; }
+  button:disabled { opacity: .4; cursor: default; }
+  .hint { font-size: 12px; opacity: .7; line-height: 1.6; }
+  #banner { position: fixed; inset: 0; display: none; z-index: 10; align-items: center; justify-content: center; background: rgba(6,8,15,.85); }
+  #banner .card { background: #161a2c; border: 1px solid #2a2f4a; border-radius: 14px; padding: 30px 40px; text-align: center; }
+  #banner h2 { margin: 0 0 14px; font-size: 30px; letter-spacing: 2px; }
+</style>
+
+<h1>ТАКТИКА · прототип</h1>
+<div class="wrap">
+  <canvas id="c" width="640" height="440"></canvas>
+  <div class="side">
+    <div class="box">
+      <div class="lbl">Ход</div>
+      <div class="turn" id="turnInfo">—</div>
+    </div>
+    <div class="btns">
+      <button class="btn-primary" id="endBtn" disabled>Завершить ход</button>
+      <button class="btn-ghost" id="restartBtn">⟳ Заново</button>
+    </div>
+    <div class="box hint" id="hint">Твой герой — золотой. Кликай по светлым клеткам, чтобы идти, и по соседнему враге (красный), чтобы ударить.</div>
+    <div class="box">
+      <div class="lbl">Инициатива</div>
+      <ul class="order" id="order"></ul>
+    </div>
+    <div class="box">
+      <div class="lbl">Журнал боя</div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</div>
+<div id="banner"><div class="card"><h2 id="bannerText"></h2><button class="btn-primary" id="bannerBtn">Играть снова</button></div></div>
+
+<script>
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  const GRID = 8, TW = 64, TH = 32, OX = 320, OY = 60;
+
+  const TEAMS = {
+    hero:  { color: '#ffcf4d', edge: '#7a5c00' },
+    ally:  { color: '#5b8dff', edge: '#1e3a80' },
+    enemy: { color: '#ff5c5c', edge: '#7a1e1e' },
+    brute: { color: '#d23b3b', edge: '#5a1010' },
+  };
+
+  let units, order, turnPtr, round, active, state, moveLeft, reach, anim, floaters, sparks, now = 0, hoverTile = null;
+
+  function makeUnits() {
+    return [
+      { name: 'Протагонист', kind: 'hero',  team: 'player', hp: 60, max: 60, move: 5, dmgMin: 10, dmgMax: 18, skill: 78, def: 26, init: 110, gx: 1, gy: 6, hero: true },
+      { name: 'Союзник Гарт', kind: 'ally',  team: 'player', hp: 46, max: 46, move: 4, dmgMin: 8,  dmgMax: 14, skill: 64, def: 20, init: 86,  gx: 0, gy: 6 },
+      { name: 'Союзник Вэл',  kind: 'ally',  team: 'player', hp: 42, max: 42, move: 4, dmgMin: 8,  dmgMax: 15, skill: 62, def: 18, init: 80,  gx: 2, gy: 7 },
+      { name: 'Разбойник',    kind: 'enemy', team: 'enemy',  hp: 38, max: 38, move: 4, dmgMin: 7,  dmgMax: 13, skill: 58, def: 12, init: 76,  gx: 6, gy: 1 },
+      { name: 'Разбойник',    kind: 'enemy', team: 'enemy',  hp: 38, max: 38, move: 4, dmgMin: 7,  dmgMax: 13, skill: 58, def: 12, init: 72,  gx: 7, gy: 2 },
+      { name: 'Лучник',       kind: 'enemy', team: 'enemy',  hp: 32, max: 32, move: 5, dmgMin: 6,  dmgMax: 12, skill: 60, def: 10, init: 90,  gx: 5, gy: 0 },
+      { name: 'Громила',      kind: 'brute', team: 'enemy',  hp: 58, max: 58, move: 3, dmgMin: 12, dmgMax: 20, skill: 60, def: 22, init: 58,  gx: 7, gy: 0 },
+    ].map((u, i) => { u.id = i; u.alive = true; u.px = null; u.py = null; u.lunge = 0; u.lungeT = 0.3 + i * 0.13; u.flinch = 0; u.engaged = false; u.faceFoe = null; u.flinchFrom = null; u.bobPhase = i * 1.7; return u; });
+  }
+
+  const key = (x, y) => x + ',' + y;
+  const inBounds = (x, y) => x >= 0 && y >= 0 && x < GRID && y < GRID;
+  const cheb = (x1, y1, x2, y2) => Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2));
+  function neigh8(x, y) { const r = []; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) if (dx || dy) { const nx = x + dx, ny = y + dy; if (inBounds(nx, ny)) r.push([nx, ny]); } return r; }
+  function unitAt(x, y) { return units.find(u => u.alive && u.gx === x && u.gy === y) || null; }
+  function tileScreen(x, y) { return { x: OX + (x - y) * TW / 2, y: OY + (x + y) * TH / 2 }; }
+  function screenToTile(mx, my) { const a = (mx - OX) / (TW / 2), b = (my - OY) / (TH / 2); return { x: Math.round((a + b) / 2), y: Math.round((b - a) / 2) }; }
+
+  // BFS по свободным клеткам (start разрешён). Возвращает шаги и предков.
+  function bfs(sx, sy) {
+    const dist = new Map(), prev = new Map(); dist.set(key(sx, sy), 0);
+    const q = [[sx, sy]];
+    while (q.length) {
+      const [x, y] = q.shift(), d = dist.get(key(x, y));
+      for (const [nx, ny] of neigh8(x, y)) {
+        const k = key(nx, ny);
+        if (dist.has(k) || unitAt(nx, ny)) continue;
+        dist.set(k, d + 1); prev.set(k, [x, y]); q.push([nx, ny]);
+      }
+    }
+    return { dist, prev };
+  }
+  function buildPath(prev, sx, sy, tx, ty) {
+    const path = [[tx, ty]]; let cur = key(tx, ty);
+    while (cur !== key(sx, sy)) { const p = prev.get(cur); if (!p) return [[sx, sy]]; path.unshift(p); cur = key(p[0], p[1]); }
+    return path;
+  }
+  function computeReach() {
+    reach = new Map(); const { dist } = bfs(active.gx, active.gy);
+    for (const [k, d] of dist) if (d > 0 && d <= moveLeft) reach.set(k, d);
+  }
+
+  function log(msg, color) {
+    const el = document.getElementById('log'), d = document.createElement('div');
+    d.textContent = msg; if (color) d.style.color = color; el.prepend(d);
+    while (el.children.length > 40) el.removeChild(el.lastChild);
+  }
+  function floater(u, text, color) {
+    const s = tileScreen(u.gx, u.gy); floaters.push({ x: s.x, y: s.y - 24, text, color, life: 1 });
+  }
+
+  function resolveAttack(a, t) {
+    const chance = Math.max(10, Math.min(95, a.skill - t.def + 15));
+    if (Math.random() * 100 > chance) { log(`${a.name} промахивается по «${t.name}»`, '#9aa'); floater(t, 'мимо', '#aab'); return; }
+    const dmg = a.dmgMin + Math.floor(Math.random() * (a.dmgMax - a.dmgMin + 1));
+    t.hp = Math.max(0, t.hp - dmg);
+    log(`${a.name} → «${t.name}»: ${dmg} урона`, a.team === 'player' ? '#ffcf4d' : '#ff8a8a');
+    floater(t, '-' + dmg, '#ff6060');
+    t.flinch = 1; t.flinchFrom = a; spark(a, t);
+    if (t.hp <= 0) { t.alive = false; log(`«${t.name}» повержен!`, '#ff4040'); }
+  }
+
+  function nearestEnemy(u) { let best = null, bd = 99; for (const o of units) if (o.alive && o.team !== u.team) { const d = cheb(u.gx, u.gy, o.gx, o.gy); if (d < bd) { bd = d; best = o; } } return best; }
+  function spark(a, b) {
+    const s1 = tileScreen(a.gx, a.gy), s2 = tileScreen(b.gx, b.gy);
+    const mx = (s1.x + s2.x) / 2, my = (s1.y + s2.y) / 2 - 14;
+    for (let i = 0; i < 5; i++) sparks.push({ x: mx, y: my, vx: (Math.random() - .5) * 90, vy: (Math.random() - .5) * 70 - 20, life: 1, color: '#ffe08a' });
+  }
+  // Слой «энгейджа» — ЧИСТО косметический: бойцы держат стойку и смотрят на врага,
+  // но урон и смерти случаются ТОЛЬКО в свой ход. Состояние боя между ходами не меняется.
+  function updateEngagement(dt) {
+    for (const u of units) {
+      if (!u.alive) { u.engaged = false; continue; }
+      if (u.flinch > 0) u.flinch = Math.max(0, u.flinch - dt * 4);
+      const foe = nearestEnemy(u);
+      u.engaged = !!(foe && cheb(u.gx, u.gy, foe.gx, foe.gy) <= 1);
+      u.faceFoe = u.engaged ? foe : null;
+    }
+  }
+
+  function checkEnd() {
+    const hero = units.find(u => u.hero);
+    const enemies = units.filter(u => u.alive && u.team === 'enemy');
+    const allies = units.filter(u => u.alive && u.team === 'player');
+    if (!enemies.length) { finish('ПОБЕДА', '#5cf58a'); return true; }
+    if (!hero.alive || !allies.length) { finish('ПОРАЖЕНИЕ', '#ff5c5c'); return true; }
+    return false;
+  }
+  function finish(text, color) {
+    state = 'over';
+    document.getElementById('endBtn').disabled = true;
+    const b = document.getElementById('bannerText'); b.textContent = text; b.style.color = color;
+    document.getElementById('banner').style.display = 'flex';
+  }
+
+  function renderOrder() {
+    const el = document.getElementById('order'); el.innerHTML = '';
+    order.forEach(u => {
+      const li = document.createElement('li');
+      if (u === active) li.classList.add('active');
+      if (!u.alive) li.classList.add('dead');
+      li.innerHTML = `<span class="dot" style="background:${TEAMS[u.kind].color}"></span>`
+        + `<span class="nm">${u.name}${u.hero ? ' ★' : ''}</span>`
+        + `<span class="hp">${u.hp}/${u.max}</span>`;
+      el.appendChild(li);
+    });
+  }
+
+  // ---- Ход ----
+  function startRound() {
+    order = units.filter(u => u.alive).sort((a, b) => b.init - a.init);
+    turnPtr = 0; round++;
+    beginTurn();
+  }
+  function beginTurn() {
+    if (turnPtr >= order.length || !order[turnPtr] || !order[turnPtr].alive) { advance(); return; }
+    active = order[turnPtr];
+    if (checkEnd()) return;
+    renderOrder();
+    if (active.hero) {
+      state = 'player'; moveLeft = active.move; computeReach();
+      document.getElementById('endBtn').disabled = false;
+      document.getElementById('turnInfo').innerHTML = `Твой ход <small>· раунд ${round}</small>`;
+      document.getElementById('hint').textContent = 'Кликай по светлым клеткам — идти. По соседнему враге — атаковать (завершает ход).';
+    } else {
+      state = 'ai'; reach = null;
+      document.getElementById('endBtn').disabled = true;
+      document.getElementById('turnInfo').innerHTML = `Ходит «${active.name}» <small>· раунд ${round}</small>`;
+      setTimeout(() => aiTakeTurn(active), 220);
+    }
+  }
+  function advance() {
+    do { turnPtr++; } while (turnPtr < order.length && (!order[turnPtr] || !order[turnPtr].alive));
+    if (turnPtr >= order.length) startRound(); else beginTurn();
+  }
+  function endTurn() { if (state === 'over') return; active = null; state = 'transition'; document.getElementById('endBtn').disabled = true; advance(); }
+
+  // ---- ИИ ----
+  function aiPlan(u) {
+    const foes = units.filter(x => x.alive && x.team !== u.team);
+    if (!foes.length) return null;
+    const { dist, prev } = bfs(u.gx, u.gy);
+    let best = null;
+    for (const f of foes) for (const [ax, ay] of neigh8(f.gx, f.gy)) {
+      let d; if (ax === u.gx && ay === u.gy) d = 0; else if (dist.has(key(ax, ay))) d = dist.get(key(ax, ay)); else continue;
+      if (!best || d < best.d) best = { d, tx: ax, ty: ay, foe: f };
+    }
+    if (best) {
+      let path = (best.tx === u.gx && best.ty === u.gy) ? [[u.gx, u.gy]] : buildPath(prev, u.gx, u.gy, best.tx, best.ty);
+      if (path.length - 1 > u.move) path = path.slice(0, u.move + 1);
+      const e = path[path.length - 1];
+      return { path, attack: cheb(e[0], e[1], best.foe.gx, best.foe.gy) <= 1 ? best.foe : null };
+    }
+    // не дотянуться — идём в сторону ближайшего врага
+    const nf = foes.reduce((p, c) => cheb(u.gx, u.gy, c.gx, c.gy) < cheb(u.gx, u.gy, p.gx, p.gy) ? c : p);
+    let bt = null;
+    for (const [k, d] of dist) { if (d === 0 || d > u.move) continue; const [x, y] = k.split(',').map(Number); const h = cheb(x, y, nf.gx, nf.gy); if (!bt || h < bt.h || (h === bt.h && d < bt.d)) bt = { x, y, h, d }; }
+    if (bt) return { path: buildPath(prev, u.gx, u.gy, bt.x, bt.y), attack: null };
+    return null;
+  }
+  function aiTakeTurn(u) {
+    if (state === 'over') return;
+    const plan = aiPlan(u);
+    if (!plan) { endTurn(); return; }
+    const strike = () => { if (state === 'over') return; if (plan.attack && plan.attack.alive) resolveAttack(u, plan.attack); renderOrder(); setTimeout(endTurn, 260); };
+    if (plan.path && plan.path.length > 1) animateMove(u, plan.path, () => setTimeout(strike, 90));
+    else strike();
+  }
+
+  // ---- Анимация перемещения ----
+  function animateMove(u, path, done) {
+    u.gx = path[path.length - 1][0]; u.gy = path[path.length - 1][1];
+    anim = { u, path, idx: 0, t: 0, done };
+  }
+  function updateAnim(dt) {
+    if (!anim) return;
+    anim.t += dt * 10;
+    if (anim.t >= 1) { anim.t = 0; anim.idx++; if (anim.idx >= anim.path.length - 1) { const d = anim.done; anim.u.px = anim.u.py = null; anim = null; if (d) d(); return; } }
+    const a = tileScreen(anim.path[anim.idx][0], anim.path[anim.idx][1]);
+    const b = tileScreen(anim.path[anim.idx + 1][0], anim.path[anim.idx + 1][1]);
+    anim.u.px = a.x + (b.x - a.x) * anim.t; anim.u.py = a.y + (b.y - a.y) * anim.t;
+  }
+
+  // ---- Ввод ----
+  cv.addEventListener('mousemove', e => {
+    const r = cv.getBoundingClientRect(); hoverTile = screenToTile(e.clientX - r.left, e.clientY - r.top);
+  });
+  cv.addEventListener('mouseleave', () => hoverTile = null);
+  cv.addEventListener('click', e => {
+    if (state !== 'player' || anim) return;
+    const r = cv.getBoundingClientRect(); const t = screenToTile(e.clientX - r.left, e.clientY - r.top);
+    if (!inBounds(t.x, t.y)) return;
+    const target = unitAt(t.x, t.y);
+    if (target && target.team === 'enemy' && cheb(active.gx, active.gy, t.x, t.y) <= 1) {
+      document.getElementById('endBtn').disabled = true;
+      resolveAttack(active, target); renderOrder();
+      setTimeout(endTurn, 220); return;
+    }
+    if (!target && reach && reach.has(key(t.x, t.y))) {
+      const { prev } = bfs(active.gx, active.gy);
+      const path = buildPath(prev, active.gx, active.gy, t.x, t.y);
+      const steps = path.length - 1;
+      animateMove(active, path, () => { moveLeft -= steps; computeReach(); });
+    }
+  });
+  document.getElementById('endBtn').addEventListener('click', endTurn);
+  document.getElementById('restartBtn').addEventListener('click', initBattle);
+  document.getElementById('bannerBtn').addEventListener('click', initBattle);
+
+  // ---- Отрисовка ----
+  function drawTile(x, y, fill, stroke) {
+    const s = tileScreen(x, y);
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y - TH / 2); ctx.lineTo(s.x + TW / 2, s.y); ctx.lineTo(s.x, s.y + TH / 2); ctx.lineTo(s.x - TW / 2, s.y); ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+  }
+  function drawUnit(u) {
+    const s = (u.px != null) ? { x: u.px, y: u.py } : tileScreen(u.gx, u.gy);
+    if (u.px == null && u.engaged && state !== 'over') {
+      if (u !== active) {
+        s.x += Math.cos(now / 700 + u.bobPhase) * 1.3;
+        s.y += Math.sin(now / 260 + u.bobPhase) * 1.1;
+        if (u.faceFoe) { const b = tileScreen(u.faceFoe.gx, u.faceFoe.gy); const dx = b.x - s.x, dy = b.y - s.y, L = Math.hypot(dx, dy) || 1; const feint = Math.pow(Math.max(0, Math.sin(now / 1100 + u.bobPhase * 2)), 8) * 4; s.x += dx / L * feint; s.y += dy / L * feint * 0.7; }
+      }
+      if (u.flinch > 0 && u.flinchFrom) { const b = tileScreen(u.flinchFrom.gx, u.flinchFrom.gy); const dx = s.x - b.x, dy = s.y - b.y, L = Math.hypot(dx, dy) || 1; s.x += dx / L * 4 * u.flinch; s.y += dy / L * 3 * u.flinch; }
+    }
+    // тень
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(s.x, s.y + 4, 15, 7, 0, 0, Math.PI * 2); ctx.fill();
+    const t = TEAMS[u.kind];
+    // тело
+    ctx.fillStyle = t.color; ctx.strokeStyle = t.edge; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(s.x - 9, s.y + 2); ctx.lineTo(s.x - 7, s.y - 20); ctx.lineTo(s.x + 7, s.y - 20); ctx.lineTo(s.x + 9, s.y + 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // голова
+    ctx.beginPath(); ctx.arc(s.x, s.y - 26, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (u.hero) { ctx.fillStyle = '#fff6cf'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('★', s.x, s.y - 34); }
+    if (u.engaged && u.faceFoe && state !== 'over') {
+      const dir = Math.sign(tileScreen(u.faceFoe.gx, u.faceFoe.gy).x - tileScreen(u.gx, u.gy).x) || 1;
+      ctx.strokeStyle = t.edge; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(s.x + dir * 7, s.y - 14); ctx.lineTo(s.x + dir * 15, s.y - 22 - (u.lunge > 0 ? 3 : 0)); ctx.stroke();
+    }
+    // полоска HP
+    const w = 26, hpw = w * (u.hp / u.max);
+    ctx.fillStyle = '#000'; ctx.fillRect(s.x - w / 2, s.y - 46, w, 4);
+    ctx.fillStyle = u.team === 'player' ? '#5cf58a' : '#ff5c5c'; ctx.fillRect(s.x - w / 2, s.y - 46, hpw, 4);
+  }
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    for (let x = 0; x < GRID; x++) for (let y = 0; y < GRID; y++) {
+      let fill = ((x + y) % 2 === 0) ? '#1a2035' : '#151a2c', stroke = '#232a45';
+      if (reach && reach.has(key(x, y))) { fill = '#243a55'; stroke = '#3d6fa0'; }
+      if (hoverTile && hoverTile.x === x && hoverTile.y === y) stroke = '#ffcf4d';
+      drawTile(x, y, fill, stroke);
+    }
+    if (active) { const s = tileScreen(active.gx, active.gy); const p = 0.5 + 0.5 * Math.sin(now / 250);
+      drawTile(active.gx, active.gy, null, active.hero ? `rgba(255,207,77,${p})` : `rgba(255,120,120,${p})`); }
+    // враги, до которых дотянуться (в ход игрока)
+    if (state === 'player') units.forEach(u => { if (u.alive && u.team === 'enemy' && cheb(active.gx, active.gy, u.gx, u.gy) <= 1)
+      drawTile(u.gx, u.gy, 'rgba(255,80,80,.22)', '#ff5c5c'); });
+    units.filter(u => u.alive).sort((a, b) => (a.gy + a.gx) - (b.gy + b.gx)).forEach(drawUnit);
+    for (const sp of sparks) { ctx.globalAlpha = Math.max(0, sp.life); ctx.fillStyle = sp.color; ctx.fillRect(sp.x - 1.5, sp.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const f of floaters) { ctx.globalAlpha = Math.max(0, f.life); ctx.fillStyle = f.color; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(f.text, f.x, f.y); }
+    ctx.globalAlpha = 1;
+  }
+
+  let lastT = 0;
+  function loop(t) {
+    const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t; now = t;
+    updateAnim(dt);
+    if (state !== 'over') updateEngagement(dt);
+    for (const f of floaters) { f.y -= 22 * dt; f.life -= dt * 1.1; }
+    floaters = floaters.filter(f => f.life > 0);
+    for (const sp of sparks) { sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.vy += 160 * dt; sp.life -= dt * 2.2; }
+    sparks = sparks.filter(sp => sp.life > 0);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function initBattle() {
+    units = makeUnits(); round = 0; active = null; anim = null; floaters = []; sparks = []; reach = null; state = 'init';
+    document.getElementById('banner').style.display = 'none';
+    document.getElementById('log').innerHTML = '';
+    log('Бой начинается!', '#ffcf4d');
+    startRound();
+  }
+
+  initBattle();
+  requestAnimationFrame(loop);
+</script>
