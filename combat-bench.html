@@ -14,13 +14,15 @@
   .lbl { font-size: 11px; opacity: .55; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
   .turn { font-size: 15px; font-weight: 700; }
   .turn small { font-weight: 400; opacity: .6; }
+  .row { display: flex; gap: 6px; }
   button { padding: 9px 10px; font-size: 13px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; width: 100%; }
   button:active { transform: translateY(1px); }
   .btn-primary { background: #ffcf4d; color: #2a1e00; }
   .btn-ghost { background: #232748; color: #cfd2f0; }
+  .btn-ghost.sel { outline: 2px solid #ffcf4d; }
   button:disabled { opacity: .35; cursor: default; }
   .hint { font-size: 12px; opacity: .8; line-height: 1.55; }
-  .log { height: 140px; overflow-y: auto; font-size: 12px; line-height: 1.5; display: flex; flex-direction: column-reverse; }
+  .log { height: 128px; overflow-y: auto; font-size: 12px; line-height: 1.5; display: flex; flex-direction: column-reverse; }
   .log div { padding: 1px 0; border-bottom: 1px solid #1e2338; }
   .knobs { display: grid; grid-template-columns: 1fr auto; gap: 5px 8px; align-items: center; font-size: 12px; }
   .knobs input { width: 58px; background: #0d0f1e; border: 1px solid #3a3f6a; color: #fff; border-radius: 6px; padding: 4px 6px; font-size: 12px; }
@@ -29,19 +31,16 @@
   #banner h2 { margin: 0 0 14px; font-size: 28px; letter-spacing: 2px; }
 </style>
 
-<h1>БОЕВОЙ СТЕНД <small>· ближний бой · Реализация C2 (оружие)</small></h1>
+<h1>БОЕВОЙ СТЕНД <small>· ближний бой · физика + сценарии</small></h1>
 <div class="wrap">
   <canvas id="c" width="760" height="500"></canvas>
   <div class="side">
+    <div class="box"><div class="lbl">Сценарий</div><div class="row"><button class="btn-ghost" id="s13">1 × 3</button><button class="btn-ghost" id="s31">3 × 1</button><button class="btn-ghost sel" id="s33">3 × 3</button></div></div>
     <div class="box"><div class="lbl">Ход</div><div class="turn" id="turnInfo">—</div></div>
     <div class="box"><button class="btn-primary" id="end" disabled>Завершить ход раньше</button></div>
-    <div class="box hint" id="hint">Клик по земле — шаг. Клик по врагу вплотную — рубящий удар (это и есть твой ход). Оставшиеся очки уйдут во внимание: доворот лицом и тычки в пассиве. Заходи со спины.</div>
+    <div class="box hint" id="hint">Клик по земле — шаг (с инерцией). Клик по врагу вплотную — рубящий удар. Остаток очков → внимание: доворот и тычки в пассиве. Заходи со спины.</div>
     <div class="box"><div class="lbl">Журнал</div><div class="log" id="log"></div></div>
-    <div class="box">
-      <div class="lbl">Крутилки</div>
-      <div class="knobs" id="knobs"></div>
-      <button class="btn-ghost" id="reset" style="margin-top:8px">⟳ Новый бой</button>
-    </div>
+    <div class="box"><div class="lbl">Крутилки</div><div class="knobs" id="knobs"></div></div>
   </div>
 </div>
 <div id="banner"><div class="card"><h2 id="bannerText"></h2><button class="btn-primary" id="bannerBtn">Ещё раз</button></div></div>
@@ -51,26 +50,28 @@
   const BETWEEN = 950, SLASH_DUR = 0.42, POKE_DUR = 0.32, RIP_DUR = 0.38, IMPACT = 0.5;
   const P = {
     apMax: 100, atkDmg: 17, attackCost: 45, flankBonus: 2.0, riposteCost: 30, ripMult: 0.9,
-    knockback: 30, lunge: 8, frontArc: 150, meleeRange: 48, stagger: 20, staggerFlank: 16,
-    trackCost: 9, trackSpeed: 5, orbitSpeed: 10,
-    pokeEvery: 1.8, pokeCost: 6, pokeFull: 2, pokeSoft: 0.6, pokeKnock: 6,
+    knockback: 320, lungeImp: 130, frontArc: 150, meleeRange: 48, stagger: 20, staggerFlank: 16,
+    turnRate: 3.0, turnCost: 13, slowEase: 0.55, passSpeed: 62, passAccel: 3.5, moveSpeed: 300, accel: 12, drag: 0.10, space: 12, push: 700,
+    pokeEvery: 1.8, pokeCost: 6, pokeFull: 2, pokeSoft: 0.6, pokeKnock: 85,
   };
   const KNOBS = [
-    ['apMax', 'Очки хода'], ['atkDmg', 'Урон рубки'], ['flankBonus', 'Спина ×'], ['stagger', 'Оглушение'],
-    ['knockback', 'Отброс'], ['meleeRange', 'Досягаемость'], ['frontArc', 'Дуга лица°'],
-    ['trackCost', 'Слежение/сек'], ['orbitSpeed', 'Кружение'], ['pokeEvery', 'Тычок/сек'],
-    ['pokeFull', 'Тычок в спину'], ['pokeSoft', 'Тычок в лицо'],
+    ['atkDmg', 'Урон рубки'], ['flankBonus', 'Спина ×'], ['stagger', 'Оглушение'], ['knockback', 'Отброс(сила)'],
+    ['meleeRange', 'Досягаемость'], ['frontArc', 'Дуга лица°'], ['space', 'Дистанция'], ['passSpeed', 'Кружение'],
+    ['pokeEvery', 'Тычок/сек'], ['pokeFull', 'Тычок спина'], ['pokeSoft', 'Тычок лицо'], ['drag', 'Инерция'],
+    ['turnRate', 'Скорость разворота'], ['turnCost', 'Цена разворота'],
   ];
+  const SCEN = { '1v3': { A: 1, B: 3 }, '3v1': { A: 3, B: 1 }, '3v3': { A: 3, B: 3 } };
 
-  let units, order, turnPtr, round, active, state, floaters, bursts, now = 0, hover = null, busy = false, freeze = 0, shake = 0;
+  let units, order, turnPtr, round, active, state, floaters, bursts, scenario = '3v3', now = 0, hover = null, busy = false, freeze = 0, shake = 0, slowmo = 1;
 
-  function makeUnits() {
-    return [
-      { name: 'Ты',     team: 'A', col: '#5b8dff', x: 300, y: 300, face: 0,       init: 100 },
-      { name: 'Друг',   team: 'A', col: '#4ec8f5', x: 300, y: 210, face: 0,       init: 80 },
-      { name: 'Враг-1', team: 'B', col: '#ff5c5c', x: 470, y: 250, face: Math.PI, init: 90 },
-      { name: 'Враг-2', team: 'B', col: '#ff8a4d', x: 470, y: 340, face: Math.PI, init: 70 },
-    ].map((u, i) => { u.id = i; u.R = 15; u.hp = 44; u.max = 44; u.alive = true; u.ap = P.apMax; u.att = P.apMax; u.rx = u.x; u.ry = u.y; u.flinch = 0; u.pokeT = 0.6 + i * 0.25; u.targetId = null; u.swing = null; return u; });
+  function place(n, x) { const o = []; for (let i = 0; i < n; i++) o.push({ x, y: 250 + (i - (n - 1) / 2) * 96 }); return o; }
+  function makeUnits(scen) {
+    const cfg = SCEN[scen], A = place(cfg.A, 235), B = place(cfg.B, 525), list = [];
+    const nA = ['Ты', 'Друг', 'Соратник'], cA = ['#5b8dff', '#4ec8f5', '#7c83ff'];
+    const nB = ['Враг-1', 'Враг-2', 'Враг-3'], cB = ['#ff5c5c', '#ff8a4d', '#e0574d'];
+    A.forEach((p, i) => list.push({ name: nA[i], team: 'A', col: cA[i], x: p.x, y: p.y, face: 0, init: 100 - i * 12 }));
+    B.forEach((p, i) => list.push({ name: nB[i], team: 'B', col: cB[i], x: p.x, y: p.y, face: Math.PI, init: 94 - i * 12 }));
+    return list.map((u, i) => { u.id = i; u.R = 15; u.hp = 44; u.max = 44; u.alive = true; u.ap = P.apMax; u.att = P.apMax; u.vx = 0; u.vy = 0; u.rx = u.x; u.ry = u.y; u.flinch = 0; u.pokeT = 0.6 + i * 0.2; u.targetId = null; u.swing = null; u.mt = null; u.refaceFlag = false; return u; });
   }
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -78,68 +79,92 @@
   function liveTarget(u) { let t = units.find(x => x.id === u.targetId); if (!t || !t.alive || t.team === u.team) { t = nearestFoe(u); u.targetId = t ? t.id : null; } return t; }
   function inFront(d, o) { const to = Math.atan2(o.y - d.y, o.x - d.x); const diff = Math.atan2(Math.sin(to - d.face), Math.cos(to - d.face)); return Math.abs(diff) <= (P.frontArc * Math.PI / 180) / 2; }
   function angleLerp(a, b, t) { const diff = Math.atan2(Math.sin(b - a), Math.cos(b - a)); return a + diff * t; }
-  function clampArena(u) { u.x = Math.max(u.R, Math.min(cv.width - u.R, u.x)); u.y = Math.max(u.R, Math.min(cv.height - u.R, u.y)); }
-  function resolveCollisions() {
-    for (let it = 0; it < 5; it++) for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length; j++) {
-      const a = units[i], b = units[j]; if (!a.alive || !b.alive) continue;
-      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.R + b.R;
-      if (d > 0.001 && d < min) { const p = (min - d) / 2, ux = dx / d, uy = dy / d; a.x -= ux * p; a.y -= uy * p; b.x += ux * p; b.y += uy * p; }
-      else if (d <= 0.001) { a.x -= 1; b.x += 1; }
-    }
-    for (const u of units) clampArena(u);
-  }
 
   function log(m, c) { const el = document.getElementById('log'), d = document.createElement('div'); d.textContent = m; if (c) d.style.color = c; el.prepend(d); while (el.children.length > 60) el.removeChild(el.lastChild); }
   function floater(u, t, c, size) { floaters.push({ x: u.x, y: u.y - 26, t, c, life: 1, size: size || 15 }); }
   function applyDamage(t, raw, open, big) { const dmg = Math.round(raw); if (dmg <= 0) return 0; t.hp = Math.max(0, t.hp - dmg); t.flinch = big ? 1.7 : 1; floater(t, '-' + dmg + (open ? ' 🗡' : ''), open ? '#ff3b3b' : '#ffb0b0', big ? 25 : 13); if (t.hp <= 0) { t.alive = false; log(`✖ ${t.name} повержен`, '#ff4040'); } return dmg; }
 
-  // ---- Взмахи оружием ----
+  // ---- Физика (инерция, личное пространство, столкновения) ----
+  function steer(u, tx, ty, dt, cap, accel) { const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy); if (d < 2) return; const sp = Math.min(cap, d * 3.2), ux = dx / d, uy = dy / d, k = Math.min(1, dt * accel); u.vx += (ux * sp - u.vx) * k; u.vy += (uy * sp - u.vy) * k; }
+  function physics(dt) {
+    const eng = P.meleeRange + 60, pref = P.meleeRange * 0.92;
+    for (const u of units) {
+      if (!u.alive) continue;
+      if (u === active && u.mt) { steer(u, u.mt.x, u.mt.y, dt, P.moveSpeed, P.accel); if (Math.hypot(u.mt.x - u.x, u.mt.y - u.y) < 6) u.mt = null; }
+      else if ((state === 'ai' || state === 'between') && u !== active) { const t = liveTarget(u); if (t && dist(u, t) < eng) { const a = u.id * 2.399 + now * 0.0003; steer(u, t.x + Math.cos(a) * pref, t.y + Math.sin(a) * pref, dt, P.passSpeed, P.passAccel); } }
+    }
+    for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length; j++) { const a = units[i], b = units[j]; if (!a.alive || !b.alive) continue; const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.R + b.R + P.space; if (d > 0.1 && d < min) { const f = (min - d) / min * P.push, ux = dx / d, uy = dy / d; a.vx -= ux * f * dt; a.vy -= uy * f * dt; b.vx += ux * f * dt; b.vy += uy * f * dt; } }
+    const damp = Math.pow(P.drag, dt);
+    for (const u of units) { if (!u.alive) continue; u.vx *= damp; u.vy *= damp; u.x += u.vx * dt; u.y += u.vy * dt; }
+    for (let it = 0; it < 4; it++) for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length; j++) { const a = units[i], b = units[j]; if (!a.alive || !b.alive) continue; const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.R + b.R; if (d > 0.001 && d < min) { const p = (min - d) / 2, ux = dx / d, uy = dy / d; a.x -= ux * p; a.y -= uy * p; b.x += ux * p; b.y += uy * p; const rel = (b.vx - a.vx) * ux + (b.vy - a.vy) * uy; if (rel < 0) { a.vx += ux * rel * 0.5; a.vy += uy * rel * 0.5; b.vx -= ux * rel * 0.5; b.vy -= uy * rel * 0.5; } } else if (d <= 0.001) { a.x -= 1; b.x += 1; } }
+    for (const u of units) { if (!u.alive) continue; if (u.x < u.R) { u.x = u.R; u.vx = Math.abs(u.vx) * 0.3; } if (u.x > cv.width - u.R) { u.x = cv.width - u.R; u.vx = -Math.abs(u.vx) * 0.3; } if (u.y < u.R) { u.y = u.R; u.vy = Math.abs(u.vy) * 0.3; } if (u.y > cv.height - u.R) { u.y = cv.height - u.R; u.vy = -Math.abs(u.vy) * 0.3; } u.rx = u.x; u.ry = u.y; }
+  }
+
+  // ---- Взмахи ----
   function startSwing(u, targetId, type, endCb) { u.swing = { t: 0, dur: type === 'poke' ? POKE_DUR : type === 'riposte' ? RIP_DUR : SLASH_DUR, type, targetId, dir: (u.id % 2 ? 1 : -1), hit: false, endCb }; }
   function resolveSwing(u) {
     const s = u.swing, t = units.find(x => x.id === s.targetId);
-    if (!t || !t.alive || dist(u, t) > P.meleeRange + P.knockback + 12) { if (s.type !== 'poke') log(`${u.name} бьёт по воздуху`, '#8a90b8'); return; }
+    if (!t || !t.alive || dist(u, t) > P.meleeRange + 30) { if (s.type !== 'poke') log(`${u.name} бьёт по воздуху`, '#8a90b8'); return; }
     const ang = Math.atan2(t.y - u.y, t.x - u.x);
     if (s.type === 'poke') {
       if (u.att <= 0) return; u.att = Math.max(0, u.att - P.pokeCost);
       const aware = t.att > 0 && inFront(t, u), dmg = aware ? P.pokeSoft : P.pokeFull;
-      t.x += Math.cos(ang) * P.pokeKnock; t.y += Math.sin(ang) * P.pokeKnock;
-      applyDamage(t, dmg, !aware, false); resolveCollisions(); return;
+      t.vx += Math.cos(ang) * P.pokeKnock; t.vy += Math.sin(ang) * P.pokeKnock;
+      applyDamage(t, dmg, !aware, false);
+      if (!aware) accent('в спину!', t.x, t.y - 34, '#ff5c5c', 0.32, 0.05);
+      return;
     }
     const rip = s.type === 'riposte', flank = !rip && !inFront(t, u);
-    u.x += Math.cos(ang) * P.lunge; u.y += Math.sin(ang) * P.lunge; t.x += Math.cos(ang) * P.knockback; t.y += Math.sin(ang) * P.knockback;
+    u.vx += Math.cos(ang) * P.lungeImp; u.vy += Math.sin(ang) * P.lungeImp; t.vx += Math.cos(ang) * P.knockback; t.vy += Math.sin(ang) * P.knockback;
     const dmg = applyDamage(t, P.atkDmg * (rip ? P.ripMult : 1) * (flank ? P.flankBonus : 1), flank, true);
     freeze = 0.09; shake = Math.max(shake, flank ? 14 : 9); bursts.push({ x: (u.x + t.x) / 2, y: (u.y + t.y) / 2, life: 1, flank });
     log(`${u.name} ${rip ? '— Ответка' : 'рубит'} ${t.name}${flank ? ' В СПИНУ' : ''}, ${dmg}`, rip ? '#8fd7ff' : (u.team === 'A' ? '#ffcf4d' : '#ff8a8a'));
-    resolveCollisions();
-    if (!rip && !flank && t.alive && t.att >= P.riposteCost && dist(u, t) <= P.meleeRange + P.knockback + 10) { t.att -= P.riposteCost; t.face = Math.atan2(u.y - t.y, u.x - t.x); startSwing(t, u.id, 'riposte'); }
+    if (!rip && !flank && t.alive && t.att >= P.riposteCost && dist(u, t) <= P.meleeRange + 26) { t.att -= P.riposteCost; t.face = Math.atan2(u.y - t.y, u.x - t.x); startSwing(t, u.id, 'riposte'); accent('Ответка!', t.x, t.y - 36, '#8fd7ff', 0.3, 0); }
     const stg = flank ? P.stagger + P.staggerFlank : P.stagger; if (t.alive) { t.att = Math.max(0, t.att - stg); floater(t, '−внимание', '#8fb0ff', 12); }
   }
   function updateSwings(dt) {
+    for (const u of units) { if (!u.swing) continue; const s = u.swing; s.t += dt; if (!s.hit && s.t / s.dur >= IMPACT) { s.hit = true; if (u.alive) resolveSwing(u); } if (s.t >= s.dur) { const cb = s.endCb; u.swing = null; if (cb) cb(); } }
+  }
+
+  function doAttack(a, t) { a.targetId = t.id; a.face = Math.atan2(t.y - a.y, t.x - a.x); a.ap -= P.attackCost; a.mt = null; busy = true; startSwing(a, t.id, 'slash', () => endTurn()); }
+
+  // ---- Акценты: замедление времени + подпись, чтобы было понятно, что случилось ----
+  function accent(text, x, y, color, slow, frz) {
+    floaters.push({ x, y, t: text, c: color, life: 1.1, size: 16 });
+    if (slow && slowmo > slow) slowmo = slow;
+    if (frz) freeze = Math.max(freeze, frz);
+  }
+
+  // ---- Взгляд: доворот к цели (занимает время; вне своего хода тратит внимание) ----
+  function faceUpdate(u, dt, costs) {
+    const t = liveTarget(u); if (!t) return;
+    const desired = Math.atan2(t.y - u.y, t.x - u.x);
+    const diff = Math.atan2(Math.sin(desired - u.face), Math.cos(desired - u.face)), need = Math.abs(diff);
+    if (costs && need > 1.5 && !u.refaceFlag && u.att > 0) { u.refaceFlag = true; accent('разворот', u.x, u.y - 34, '#c9d2ff', 0.5, 0); }
+    if (need < 0.35) u.refaceFlag = false;
+    if (need < 0.008) return;
+    if (costs && u.att <= 0) return;                        // без внимания развернуться нельзя — спина открыта
+    const step = Math.sign(diff) * Math.min(need, P.turnRate * dt);
+    u.face += step;
+    if (costs) { const before = u.att; u.att = Math.max(0, u.att - Math.abs(step) * P.turnCost); if (before > 0 && u.att <= 0) accent('открыт!', u.x, u.y - 40, '#ff8a4d', 0.45, 0); }
+  }
+  function simFacing(dt) {
+    const passivePhase = (state === 'ai' || state === 'between');
     for (const u of units) {
-      if (!u.swing) continue; const s = u.swing; s.t += dt;
-      if (!s.hit && s.t / s.dur >= IMPACT) { s.hit = true; if (u.alive) resolveSwing(u); }
-      if (s.t >= s.dur) { const cb = s.endCb; u.swing = null; if (cb) cb(); }
+      if (!u.alive || u.swing) continue;
+      if (u === active) { if (state === 'ai' || (state === 'choose' && u.mt)) faceUpdate(u, dt, false); }  // свой ход — доворот бесплатный
+      else if (passivePhase) faceUpdate(u, dt, true);                                                       // реакция вне хода — тратит внимание
     }
   }
 
-  // ---- Действия хода ----
-  function doAttack(a, t) { a.targetId = t.id; a.face = Math.atan2(t.y - a.y, t.x - a.x); a.ap -= P.attackCost; busy = true; startSwing(a, t.id, 'slash', () => endTurn()); }
-  function doStep(u, tx, ty) { const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy) || 1, step = Math.min(d, u.ap); if (step < 1) return false; u.x += dx / d * step; u.y += dy / d * step; u.ap -= step; resolveCollisions(); return true; }
-
-  // ---- Пассив ----
+  // ---- Пассив (тычки) ----
   function passiveTick(dt) {
     for (const u of units) {
       if (!u.alive || u === active || u.swing) continue;
       const t = liveTarget(u);
       if (!t || dist(u, t) > P.meleeRange + 34) { u.pokeT = P.pokeEvery; continue; }
-      if (u.att > 0) { u.face = angleLerp(u.face, Math.atan2(t.y - u.y, t.x - u.x), Math.min(1, dt * P.trackSpeed)); u.att = Math.max(0, u.att - P.trackCost * dt); }
-      const ang = Math.atan2(t.y - u.y, t.x - u.x), perp = ang + (u.id % 2 ? 1 : -1) * Math.PI / 2;
-      u.x += Math.cos(perp) * P.orbitSpeed * dt; u.y += Math.sin(perp) * P.orbitSpeed * dt;
-      const pref = P.meleeRange * 0.88 + Math.sin(now / 600 + u.id) * 5, close = (dist(u, t) - pref) * Math.min(1, dt * 2);
-      u.x += Math.cos(ang) * close; u.y += Math.sin(ang) * close;
       u.pokeT -= dt; if (u.pokeT <= 0 && u.att > 0) { u.pokeT = P.pokeEvery * (0.85 + 0.3 * (u.id % 2)); startSwing(u, t.id, 'poke'); }
     }
-    resolveCollisions();
   }
 
   // ---- Ход ----
@@ -154,32 +179,36 @@
     if (turnPtr >= order.length || !order[turnPtr] || !order[turnPtr].alive) { advance(); return; }
     active = order[turnPtr];
     if (checkEnd()) return;
-    active.ap = P.apMax; const t0 = liveTarget(active); if (t0) active.face = Math.atan2(t0.y - active.y, t0.x - active.x);
+    active.ap = P.apMax; active.mt = null; const t0 = liveTarget(active); if (t0) active.face = Math.atan2(t0.y - active.y, t0.x - active.x);
     if (active.team === 'A') { state = 'choose'; busy = false; document.getElementById('end').disabled = false; updateStatus(); }
     else { state = 'ai'; busy = true; document.getElementById('end').disabled = true; document.getElementById('turnInfo').innerHTML = `${active.name} <small>· раунд ${round}</small>`; setTimeout(() => aiTurn(active), 460); }
   }
   function advance() { do { turnPtr++; } while (turnPtr < order.length && (!order[turnPtr] || !order[turnPtr].alive)); if (turnPtr >= order.length) startRound(); else beginTurn(); }
   function endTurn() {
     if (state === 'over') return;
-    if (active) { active.att = active.ap; log(`${active.name} — ход окончен, внимание: ${Math.round(active.att)}`, '#8fe3c0'); }
+    if (active) { active.att = active.ap; active.mt = null; log(`${active.name} — ход окончен, внимание: ${Math.round(active.att)}`, '#8fe3c0'); }
     active = null; state = 'between'; busy = false; document.getElementById('end').disabled = true;
     setTimeout(() => { if (state === 'between') advance(); }, BETWEEN);
   }
-  function updateStatus() { if (!active) return; document.getElementById('turnInfo').innerHTML = `${active.name} <small>· раунд ${round}</small>`; document.getElementById('hint').innerHTML = `<b>${active.name}</b>: очки хода <b>${Math.round(active.ap)}</b>, внимание <b>${Math.round(active.att)}</b>. Клик — шаг; по врагу вплотную — рубящий удар (${P.attackCost}).`; }
+  function updateStatus() { if (!active) return; document.getElementById('turnInfo').innerHTML = `${active.name} <small>· раунд ${round}</small>`; document.getElementById('hint').innerHTML = `<b>${active.name}</b>: очки хода <b>${Math.round(active.ap)}</b>, внимание <b>${Math.round(active.att)}</b>. Клик — шаг; по врагу вплотную — удар (${P.attackCost}).`; }
   function aiTurn(u) {
     if (state === 'over') return;
-    const nf = liveTarget(u); if (nf && dist(u, nf) > P.meleeRange && u.ap >= 1) doStep(u, nf.x, nf.y);
+    const f = liveTarget(u);
+    if (f && dist(u, f) > P.meleeRange && u.ap >= 1) { const d = Math.min(dist(u, f), u.ap), ang = Math.atan2(f.y - u.y, f.x - u.x); u.mt = { x: u.x + Math.cos(ang) * d, y: u.y + Math.sin(ang) * d }; u.ap -= d; }
     setTimeout(() => {
       if (state === 'over' || !u.alive) { endTurn(); return; }
-      const f = liveTarget(u);
-      if (f && dist(u, f) <= P.meleeRange && u.ap >= P.attackCost) doAttack(u, f);
+      const g = liveTarget(u); u.mt = null;
+      if (g && dist(u, g) <= P.meleeRange + 10 && u.ap >= P.attackCost) doAttack(u, g);
       else setTimeout(endTurn, 300);
-    }, 340);
+    }, 680);
   }
 
   // ---- Ввод ----
+  function setScenario(s) { scenario = s; ['s13', 's31', 's33'].forEach(id => document.getElementById(id).classList.toggle('sel', id === ({ '1v3': 's13', '3v1': 's31', '3v3': 's33' })[s])); initBattle(); }
+  document.getElementById('s13').onclick = () => setScenario('1v3');
+  document.getElementById('s31').onclick = () => setScenario('3v1');
+  document.getElementById('s33').onclick = () => setScenario('3v3');
   document.getElementById('end').onclick = () => { if (state === 'choose' && !busy) endTurn(); };
-  document.getElementById('reset').onclick = initBattle;
   document.getElementById('bannerBtn').onclick = initBattle;
   cv.addEventListener('mousemove', e => { const r = cv.getBoundingClientRect(); hover = { x: e.clientX - r.left, y: e.clientY - r.top }; });
   cv.addEventListener('mouseleave', () => hover = null);
@@ -187,18 +216,14 @@
     if (state !== 'choose' || busy || !active) return;
     const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
     const tgt = units.find(u => u.alive && u.team !== active.team && Math.hypot(u.x - mx, u.y - my) < 20);
-    if (tgt) { active.targetId = tgt.id; if (dist(active, tgt) <= P.meleeRange && active.ap >= P.attackCost) doAttack(active, tgt); else if (active.ap >= 1) { doStep(active, tgt.x, tgt.y); updateStatus(); } }
-    else if (active.ap >= 1) { doStep(active, mx, my); updateStatus(); if (active && active.ap < 1) endTurn(); }
+    if (tgt) { active.targetId = tgt.id; if (dist(active, tgt) <= P.meleeRange && active.ap >= P.attackCost) doAttack(active, tgt); else if (active.ap >= 1) { const dx = tgt.x - active.x, dy = tgt.y - active.y, d = Math.hypot(dx, dy) || 1, st = Math.min(d, active.ap); active.mt = { x: active.x + dx / d * st, y: active.y + dy / d * st }; active.ap -= st; updateStatus(); } }
+    else if (active.ap >= 1) { const dx = mx - active.x, dy = my - active.y, d = Math.hypot(dx, dy) || 1, st = Math.min(d, active.ap); active.mt = { x: active.x + dx / d * st, y: active.y + dy / d * st }; active.ap -= st; updateStatus(); }
   });
 
   // ---- Отрисовка ----
   function drawWeapon(u, x, y) {
     let ang, len = 27, w = 4.5, trail = null;
-    if (u.swing) {
-      const s = u.swing, p = Math.min(1, s.t / s.dur);
-      if (s.type === 'poke') { ang = u.face; len = 24 + 22 * Math.sin(p * Math.PI); w = 4; }
-      else { const from = u.face - 1.7 * s.dir, to = u.face + 1.7 * s.dir, e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; ang = from + (to - from) * e; len = 33; w = 5.5; trail = { from, cur: ang }; }
-    } else { ang = u.face + 0.45; }
+    if (u.swing) { const s = u.swing, p = Math.min(1, s.t / s.dur); if (s.type === 'poke') { ang = u.face; len = 24 + 22 * Math.sin(p * Math.PI); w = 4; } else { const from = u.face - 1.7 * s.dir, to = u.face + 1.7 * s.dir, e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; ang = from + (to - from) * e; len = 33; w = 5.5; trail = { from, cur: ang }; } } else { ang = u.face + 0.45; }
     if (trail) { ctx.strokeStyle = 'rgba(220,225,255,.16)'; ctx.lineWidth = 13; ctx.lineCap = 'butt'; ctx.beginPath(); ctx.arc(x, y, len * 0.62, Math.min(trail.from, trail.cur), Math.max(trail.from, trail.cur)); ctx.stroke(); }
     const hx = x + Math.cos(u.face) * 4, hy = y + Math.sin(u.face) * 4;
     ctx.strokeStyle = '#8a90b8'; ctx.lineWidth = w + 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(ang) * 7, hy + Math.sin(ang) * 7); ctx.stroke();
@@ -207,25 +232,34 @@
   function drawUnit(u) {
     if (!u.alive) return;
     let jx = 0, jy = 0; if (u.flinch > 0) { jx = (Math.random() - .5) * 6 * u.flinch; jy = (Math.random() - .5) * 6 * u.flinch; }
-    const x = u.rx + jx, y = u.ry + jy;
-    if (u === active) { ctx.beginPath(); ctx.arc(x, y, 24, 0, Math.PI * 2); ctx.strokeStyle = '#ffcf4d'; ctx.lineWidth = 1.5; ctx.stroke(); }
-    // тело
-    ctx.beginPath(); ctx.arc(x, y, u.R, 0, Math.PI * 2); ctx.fillStyle = u.col; ctx.fill(); ctx.strokeStyle = '#0a0c16'; ctx.lineWidth = 2; ctx.stroke();
-    // «щит»/грудь по лицу (тускнеет без внимания)
-    ctx.beginPath(); ctx.arc(x, y, u.R - 3, u.face - 0.9, u.face + 0.9); ctx.strokeStyle = u.att > 0 ? 'rgba(150,210,255,.8)' : 'rgba(150,160,190,.35)'; ctx.lineWidth = 3; ctx.stroke();
+    const x = u.rx + jx, y = u.ry + jy, f = u.face, R = u.R, half = (P.frontArc * Math.PI / 180) / 2;
+
+    // едва заметный конус внимания (сектор, в котором актор держит цель)
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, 64, f - half, f + half); ctx.closePath();
+    ctx.fillStyle = u.att > 0 ? 'rgba(130,200,255,0.07)' : 'rgba(150,160,190,0.05)'; ctx.fill();
+    ctx.strokeStyle = u.att > 0 ? 'rgba(130,200,255,0.20)' : 'rgba(150,160,190,0.12)'; ctx.lineWidth = 1; ctx.stroke();
+
+    if (u === active) { ctx.beginPath(); ctx.arc(x, y, R + 9, 0, Math.PI * 2); ctx.strokeStyle = '#ffcf4d'; ctx.lineWidth = 1.5; ctx.stroke(); }
+
+    // фигурка-«капля» остриём вперёд — направление считывается сразу
+    const tx = x + Math.cos(f) * R * 1.7, ty = y + Math.sin(f) * R * 1.7;
+    const lx = x + Math.cos(f + Math.PI / 2) * R, ly = y + Math.sin(f + Math.PI / 2) * R;
+    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(lx, ly); ctx.arc(x, y, R, f + Math.PI / 2, f + 3 * Math.PI / 2); ctx.lineTo(tx, ty); ctx.closePath();
+    ctx.fillStyle = u.col; ctx.fill(); ctx.strokeStyle = '#0a0c16'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x + Math.cos(f) * R * 0.65, y + Math.sin(f) * R * 0.65, 4, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.fill();
+
     drawWeapon(u, x, y);
-    // здоровье
-    ctx.beginPath(); ctx.arc(x, y, u.R + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (u.hp / u.max)); ctx.strokeStyle = u.team === 'A' ? '#5cf58a' : '#ff7676'; ctx.lineWidth = 3; ctx.stroke();
-    // внимание
-    const av = Math.max(0, Math.min(1, u.att / P.apMax)); ctx.beginPath(); ctx.arc(x, y, u.R + 6, Math.PI / 2 - Math.PI / 2 * av, Math.PI / 2 + Math.PI / 2 * av); ctx.strokeStyle = '#8fe3ff'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.font = '11px sans-serif'; ctx.fillStyle = '#cfd6ff'; ctx.textAlign = 'center'; ctx.fillText(u.name, x, y + 36);
+
+    ctx.beginPath(); ctx.arc(x, y, R + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (u.hp / u.max)); ctx.strokeStyle = u.team === 'A' ? '#5cf58a' : '#ff7676'; ctx.lineWidth = 3; ctx.stroke();
+    const av = Math.max(0, Math.min(1, u.att / P.apMax)); ctx.beginPath(); ctx.arc(x, y, R + 7, Math.PI / 2 - Math.PI / 2 * av, Math.PI / 2 + Math.PI / 2 * av); ctx.strokeStyle = '#8fe3ff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = '11px sans-serif'; ctx.fillStyle = '#cfd6ff'; ctx.textAlign = 'center'; ctx.fillText(u.name, x, y + 40);
   }
   function draw() {
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.save();
     if (shake > 0.2) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
     if (state === 'choose' && active) {
-      ctx.beginPath(); ctx.arc(active.rx, active.ry, active.ap, 0, Math.PI * 2); ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(124,131,255,.4)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]);
+      if (active.mt) { ctx.beginPath(); ctx.moveTo(active.rx, active.ry); ctx.lineTo(active.mt.x, active.mt.y); ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(124,131,255,.5)'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]); }
       units.forEach(u => { if (u.alive && u.team !== active.team && dist(active, u) <= P.meleeRange) { ctx.beginPath(); ctx.arc(u.rx, u.ry, 21, 0, Math.PI * 2); ctx.strokeStyle = '#ffcf4d'; ctx.lineWidth = 1.5; ctx.stroke(); } });
       const tt = units.find(u => u.id === active.targetId && u.alive); if (tt) { ctx.beginPath(); ctx.arc(tt.rx, tt.ry, 26, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,80,80,.55)'; ctx.lineWidth = 1.5; ctx.stroke(); }
     }
@@ -239,22 +273,27 @@
 
   let lastT = 0;
   function loop(t) {
-    const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t; now = t;
-    if (freeze > 0) { freeze = Math.max(0, freeze - dt); draw(); requestAnimationFrame(loop); return; }
+    const dtReal = Math.min(0.05, (t - lastT) / 1000); lastT = t; now = t;
+    if (slowmo < 1) slowmo = Math.min(1, slowmo + dtReal / P.slowEase);
+    if (freeze > 0) { freeze = Math.max(0, freeze - dtReal); draw(); requestAnimationFrame(loop); return; }
+    const dt = dtReal * slowmo;
     updateSwings(dt);
-    if (state === 'ai' || state === 'between') { passiveTick(dt); checkEnd(); }
-    for (const u of units) { u.rx += (u.x - u.rx) * Math.min(1, dt * 12); u.ry += (u.y - u.ry) * Math.min(1, dt * 12); if (u.flinch > 0) u.flinch = Math.max(0, u.flinch - dt * 3); }
+    simFacing(dt);
+    if (state === 'ai' || state === 'between') passiveTick(dt);
+    physics(dt);
+    if (state === 'ai' || state === 'between') checkEnd();
+    for (const u of units) if (u.flinch > 0) u.flinch = Math.max(0, u.flinch - dtReal * 3);
     shake = shake > 0.2 ? shake * 0.86 : 0;
-    for (const b of bursts) b.life -= dt * 2.6; bursts = bursts.filter(b => b.life > 0);
-    for (const f of floaters) { f.y -= 18 * dt; f.life -= dt * 1.0; } floaters = floaters.filter(f => f.life > 0);
+    for (const b of bursts) b.life -= dtReal * 2.6; bursts = bursts.filter(b => b.life > 0);
+    for (const f of floaters) { f.y -= 18 * dtReal; f.life -= dtReal * 1.0; } floaters = floaters.filter(f => f.life > 0);
     draw(); requestAnimationFrame(loop);
   }
 
   function buildKnobs() { const el = document.getElementById('knobs'); el.innerHTML = ''; KNOBS.forEach(([k, label]) => { const l = document.createElement('div'); l.textContent = label; el.appendChild(l); const inp = document.createElement('input'); inp.type = 'number'; inp.step = 'any'; inp.value = P[k]; inp.oninput = () => { const v = parseFloat(inp.value); if (!isNaN(v)) P[k] = v; }; el.appendChild(inp); }); }
   function initBattle() {
-    units = makeUnits(); round = 0; active = null; state = 'init'; floaters = []; bursts = []; busy = false; freeze = 0; shake = 0;
+    units = makeUnits(scenario); round = 0; active = null; state = 'init'; floaters = []; bursts = []; busy = false; freeze = 0; shake = 0; slowmo = 1;
     document.getElementById('banner').style.display = 'none'; document.getElementById('log').innerHTML = '';
-    log('Стенд C2: настоящее оружие и взмахи. Урон — в момент удара клинка.', '#ffcf4d');
+    log(`Сценарий ${scenario.replace('v', ' × ')}. Физика, инерция, хореография.`, '#ffcf4d');
     startRound();
   }
   buildKnobs(); initBattle(); requestAnimationFrame(loop);
