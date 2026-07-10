@@ -4,223 +4,309 @@
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 14px; padding: 16px;
+    align-items: center; justify-content: center; gap: 12px; padding: 14px;
     background: radial-gradient(1200px 600px at 50% -10%, #23283f, #0c0e18 60%);
     color: #e8e8f0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; user-select: none;
   }
-  h1 { margin: 0; font-weight: 700; letter-spacing: 3px; font-size: 22px;
+  h1 { margin: 0; font-weight: 700; letter-spacing: 3px; font-size: 20px;
        background: linear-gradient(90deg,#ffcf4d,#ff8a4d); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  .wrap { display: flex; gap: 16px; align-items: flex-start; }
-  canvas { background: #0a0c16; border: 1px solid #2a2f4a; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
-  .side { width: 260px; display: flex; flex-direction: column; gap: 10px; }
-  .box { background: #161a2c; border: 1px solid #2a2f4a; border-radius: 10px; padding: 10px 12px; }
-  .lbl { font-size: 11px; opacity: .55; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .wrap { display: flex; gap: 14px; align-items: flex-start; }
+  canvas { background: #0a0c16; border: 1px solid #2a2f4a; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.6); cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  .side { width: 250px; display: flex; flex-direction: column; gap: 8px; }
+  .box { background: #161a2c; border: 1px solid #2a2f4a; border-radius: 10px; padding: 9px 11px; }
+  .lbl { font-size: 11px; opacity: .55; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
   .turn { font-size: 15px; font-weight: 700; }
   .turn small { font-weight: 400; opacity: .6; }
+  .iname { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+  .istat { font-size: 12px; opacity: .8; margin: 4px 0 6px; }
+  .ilbl { font-size: 11px; opacity: .55; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
+  .iab { font-size: 12px; line-height: 1.5; margin-bottom: 3px; opacity: .9; }
+  .iab b { color: #ffcf4d; }
+  #inspect { height: 152px; overflow-y: auto; }
   .order { list-style: none; margin: 0; padding: 0; font-size: 13px; }
-  .order li { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; margin-bottom: 2px; }
+  .order li { display: flex; align-items: center; gap: 7px; padding: 3px 5px; border-radius: 6px; margin-bottom: 1px; }
   .order li.active { background: #2a2f4a; }
   .order li.dead { opacity: .3; text-decoration: line-through; }
   .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
   .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hp { font-variant-numeric: tabular-nums; opacity: .8; font-size: 12px; }
-  .log { height: 130px; overflow-y: auto; font-size: 12.5px; line-height: 1.6; display: flex; flex-direction: column-reverse; }
+  .log { height: 92px; overflow-y: auto; font-size: 12px; line-height: 1.5; display: flex; flex-direction: column-reverse; }
   .log div { padding: 1px 0; border-bottom: 1px solid #1e2338; }
   .btns { display: flex; gap: 8px; }
-  button { flex: 1; padding: 10px 0; font-size: 14px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; }
+  button { padding: 9px 0; font-size: 13px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; }
+  .btns button { flex: 1; }
   button:active { transform: translateY(1px); }
   .btn-primary { background: #ffcf4d; color: #2a1e00; }
   .btn-ghost { background: #232748; color: #cfd2f0; }
   button:disabled { opacity: .4; cursor: default; }
-  .hint { font-size: 12px; opacity: .7; line-height: 1.6; }
-  #banner { position: fixed; inset: 0; display: none; z-index: 10; align-items: center; justify-content: center; background: rgba(6,8,15,.85); }
-  #banner .card { background: #161a2c; border: 1px solid #2a2f4a; border-radius: 14px; padding: 30px 40px; text-align: center; }
+  #bar { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 1000px; }
+  #bar.hidden { display: none; }
+  .abil { background: #232748; color: #e8e8f0; border: 2px solid #2a2f4a; padding: 8px 14px; }
+  .abil.sel { border-color: #ffcf4d; background: #34324a; }
+  .abil small { opacity: .6; }
+  #abilInfo { font-size: 13px; opacity: .85; height: 36px; overflow: hidden; text-align: center; max-width: 900px; line-height: 1.5; }
+  #banner, #cmd { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(6,8,15,.8); }
+  #banner { z-index: 10; } #cmd { z-index: 11; background: rgba(6,8,15,.6); }
+  .card { background: #161a2c; border: 1px solid #2a2f4a; border-radius: 14px; padding: 26px 32px; text-align: center; box-shadow: 0 20px 80px rgba(0,0,0,.7); }
   #banner h2 { margin: 0 0 14px; font-size: 30px; letter-spacing: 2px; }
+  .cmdpanel { background: #141828; border: 1px solid #2a2f4a; border-radius: 14px; width: 410px; max-width: 92vw; max-height: 84vh; display: flex; flex-direction: column; padding: 16px 18px; box-shadow: 0 20px 80px rgba(0,0,0,.7); }
+  #cmdName { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid #2a2f4a; }
+  #cmdChat { flex: 1; overflow-y: auto; min-height: 70px; max-height: 34vh; padding: 10px 2px; display: flex; flex-direction: column; gap: 6px; }
+  #cmdChat .msg { font-size: 13px; line-height: 1.5; }
+  #cmdChat .msg.you { color: #ffcf4d; } #cmdChat .msg.them { color: #cfd6ff; }
+  #cmdChat .msg.empty { opacity: .4; font-style: italic; }
+  #cmdOpts { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid #2a2f4a; }
+  .opt { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 3px; background: #20243c; border: 1px solid #2a2f4a; padding: 9px 12px; }
+  .opt:hover { background: #282e4a; }
+  .opt .ol { font-weight: 600; font-size: 13.5px; }
+  .opt .on { font-size: 12px; opacity: .6; font-weight: 400; }
+  #cmdClose { margin-top: 12px; width: 100%; }
 </style>
 
 <h1>ТАКТИКА · прототип</h1>
 <div class="wrap">
-  <canvas id="c" width="700" height="450"></canvas>
+  <canvas id="c" width="720" height="480"></canvas>
   <div class="side">
-    <div class="box">
-      <div class="lbl">Ход</div>
-      <div class="turn" id="turnInfo">—</div>
-    </div>
+    <div class="box"><div class="lbl">Ход</div><div class="turn" id="turnInfo">—</div></div>
     <div class="btns">
       <button class="btn-primary" id="endBtn" disabled>Завершить ход</button>
       <button class="btn-ghost" id="restartBtn">⟳ Заново</button>
     </div>
-    <div class="box hint" id="hint">Ты — золотой герой ★. Кликай по светлым клеткам, чтобы идти, и по соседнему враге — чтобы ударить. Серые камни надо обходить, они же закрывают линию огня.</div>
-    <div class="box">
-      <div class="lbl">Инициатива</div>
-      <ul class="order" id="order"></ul>
-    </div>
-    <div class="box">
-      <div class="lbl">Журнал боя</div>
-      <div class="log" id="log"></div>
-    </div>
+    <div class="box" id="inspect"></div>
+    <div class="box"><div class="lbl">Инициатива</div><ul class="order" id="order"></ul></div>
+    <div class="box"><div class="lbl">Журнал боя</div><div class="log" id="log"></div></div>
   </div>
 </div>
+<div id="bar"></div>
+<div id="abilInfo">Тащи по полю мышью — прокрутка. Наведи на умение или юнита — расскажу, что делает. Кликни по реплике над юнитом — можно скомандовать.</div>
 <div id="banner"><div class="card"><h2 id="bannerText"></h2><button class="btn-primary" id="bannerBtn">Играть снова</button></div></div>
+<div id="cmd"><div class="cmdpanel">
+  <div id="cmdName"></div>
+  <div id="cmdChat"></div>
+  <div id="cmdOpts"></div>
+  <button class="btn-ghost" id="cmdClose">Закрыть</button>
+</div></div>
 
 <script>
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
-  const GRID = 16, TW = 42, TH = 21, OX = 350, OY = 60;
+  const GRID = 32, TW = 40, TH = 20, WOX = 660, WOY = 40;
 
   const TEAMS = {
     hero:  { color: '#ffcf4d', edge: '#7a5c00' },
     ally:  { color: '#5b8dff', edge: '#1e3a80' },
     enemy: { color: '#ff5c5c', edge: '#7a1e1e' },
     brute: { color: '#d23b3b', edge: '#5a1010' },
+    boss:  { color: '#ff9a3c', edge: '#8a3a00' },
   };
 
-  const OBSTACLES = [
-    [7,7],[8,7],[7,8],[8,8],
-    [10,6],[10,7],[10,8],[10,9],
-    [5,9],[6,9],[7,9],
-    [4,5],[9,4],[11,11],[12,10],
+  const ABIL = {
+    strike: { id:'strike', name:'Удар',          kind:'attack',   range:1, dmg:[8,16],  acc:0,   cd:0, desc:'Базовая ближняя атака (радиус 1).' },
+    power:  { id:'power',  name:'Мощный удар',   kind:'attack',   range:1, dmg:[16,26], acc:-12, cd:2, desc:'Сильный ближний удар, но труднее попасть. Перезарядка 2.' },
+    cleave: { id:'cleave', name:'Размах',        kind:'aoe',      range:1, dmg:[8,15],  acc:-6,  cd:2, desc:'Бьёт цель и всех врагов вокруг неё. Перезарядка 2.' },
+    lunge:  { id:'lunge',  name:'Рывок',         kind:'dash',     range:5, dmg:[9,15],  acc:0,   cd:2, desc:'Бросок к врагу через поле (дальность 5) и удар. Перезарядка 2.' },
+    throw:  { id:'throw',  name:'Метнуть топор', kind:'ranged',   range:4, dmg:[8,14],  acc:-5,  cd:1, desc:'Дальний бросок (дальность 4). Нужна линия огня. Перезарядка 1.' },
+    shot:   { id:'shot',   name:'Выстрел',       kind:'ranged',   range:6, dmg:[6,12],  acc:0,   cd:0, desc:'Дальний выстрел (дальность 6). Нужна линия огня.' },
+    aimed:  { id:'aimed',  name:'Прицельный',    kind:'ranged',   range:6, dmg:[10,16], acc:16,  cd:2, desc:'Меткий выстрел: +точность и урон. Перезарядка 2.' },
+    defend: { id:'defend', name:'Оборона',       kind:'self',     range:0, def:16,      cd:1, desc:'Глухая оборона: +16 защиты до следующего хода.' },
+    rally:  { id:'rally',  name:'Клич',          kind:'buffAlly', range:3, hit:14,      cd:3, desc:'Боевой клич: союзники в радиусе 3 получают +14 точности на 2 хода. Перезарядка 3.' },
+  };
+
+  const BARKS = {
+    strike:['На!','Получай!','Вот тебе!'], power:['РРРАЗ!','С плеча!','Ломаю!'],
+    cleave:['Всех порублю!','Размахнись!'], lunge:['Иду на вы!','Не уйдёшь!','В атаку!'],
+    throw:['Лови!','Топор летит!'], shot:['Целься…','Выстрел!','Не промахнусь.'],
+    aimed:['В яблочко.','Точно в цель.'], defend:['К обороне!','Держи строй!','Не пройдут.'],
+    rally:['За мной!','Держитесь, братья!','Вперёд!'],
+  };
+  function bark(ab) { const p = BARKS[ab.id] || ['…']; return p[Math.floor(Math.random() * p.length)]; }
+  function setBubble(u, text, kind) { u.bubble = { text, birth: now, kind: kind || 'say' }; }
+
+  const ROSTER = [
+    { name:'Протагонист',  kind:'hero',  team:'player', voice:'hero',      hp:70, move:4, skill:80, def:26, init:110, gx:10, gy:21, hero:true, abils:['strike','power','lunge','throw','defend','rally'] },
+    { name:'Союзник Гарт', kind:'ally',  team:'player', voice:'veteran',   hp:52, move:3, skill:66, def:24, init:86,  gx:9,  gy:22, abils:['strike','cleave','defend'] },
+    { name:'Вэл',          kind:'ally',  team:'player', voice:'sniper',    hp:40, move:3, skill:68, def:16, init:80,  gx:11, gy:23, abils:['shot','aimed','defend'] },
+    { name:'Вожак',        kind:'boss',  team:'enemy',  voice:'commander', hp:56, move:2, skill:60, def:24, init:100, gx:24, gy:8,  commander:true, abils:['power','rally','defend'] },
+    { name:'Лучник',       kind:'enemy', team:'enemy',  voice:'sneer',     hp:32, move:4, skill:64, def:10, init:90,  gx:19, gy:11, abils:['shot','aimed','defend'] },
+    { name:'Разбойник',    kind:'enemy', team:'enemy',  voice:'cocky',     hp:40, move:3, skill:58, def:12, init:76,  gx:20, gy:10, abils:['strike','lunge','defend'] },
+    { name:'Громила',      kind:'brute', team:'enemy',  voice:'brute',     hp:62, move:2, skill:60, def:24, init:56,  gx:22, gy:11, abils:['power','cleave','defend'] },
   ];
 
-  let units, order, turnPtr, round, active, state, moveLeft, reach, anim, floaters, sparks, projectiles, blocked, now = 0, hoverTile = null;
+  const OBSTACLES = [
+    [15,15],[16,15],[15,16],[16,16],[17,16],
+    [13,18],[14,18],[15,18],[18,13],[18,14],[18,15],
+    [12,12],[20,20],[19,17],[14,20],[21,14],[11,16],[22,17],[13,13],
+  ];
+
+  let units, order, turnPtr, round, active, state, moveLeft, reach, anim, floaters, sparks, projectiles, blocked, enemyFocus;
+  let camX = 0, camY = 0, now = 0, hoverTile = null, inspectUnit = null, selectedAbil = null;
+  let panning = false, dragging = false, lastPX = 0, lastPY = 0;
 
   function makeUnits() {
-    return [
-      { name: 'Протагонист',  kind: 'hero',  team: 'player', hp: 60, max: 60, move: 4, range: 1, dmgMin: 10, dmgMax: 18, skill: 78, def: 26, init: 110, gx: 3,  gy: 12, hero: true },
-      { name: 'Союзник Гарт', kind: 'ally',  team: 'player', hp: 46, max: 46, move: 3, range: 1, dmgMin: 8,  dmgMax: 14, skill: 64, def: 20, init: 86,  gx: 1,  gy: 13 },
-      { name: 'Вэл (арбалет)', kind: 'ally', team: 'player', hp: 40, max: 40, move: 3, range: 4, dmgMin: 7,  dmgMax: 13, skill: 66, def: 16, init: 80,  gx: 2,  gy: 14 },
-      { name: 'Разбойник',    kind: 'enemy', team: 'enemy',  hp: 38, max: 38, move: 3, range: 1, dmgMin: 7,  dmgMax: 13, skill: 58, def: 12, init: 76,  gx: 13, gy: 3 },
-      { name: 'Разбойник',    kind: 'enemy', team: 'enemy',  hp: 38, max: 38, move: 3, range: 1, dmgMin: 7,  dmgMax: 13, skill: 58, def: 12, init: 72,  gx: 14, gy: 2 },
-      { name: 'Лучник',       kind: 'enemy', team: 'enemy',  hp: 30, max: 30, move: 4, range: 5, dmgMin: 6,  dmgMax: 12, skill: 62, def: 10, init: 90,  gx: 12, gy: 2 },
-      { name: 'Громила',      kind: 'brute', team: 'enemy',  hp: 58, max: 58, move: 2, range: 1, dmgMin: 12, dmgMax: 20, skill: 60, def: 22, init: 56,  gx: 14, gy: 4 },
-    ].map((u, i) => { u.id = i; u.alive = true; u.px = null; u.py = null; u.flinch = 0; u.engaged = false; u.faceFoe = null; u.flinchFrom = null; u.bobPhase = i * 1.7; return u; });
+    return ROSTER.map((base, i) => {
+      const u = Object.assign({}, base);
+      u.id = i; u.max = u.hp; u.alive = true; u.px = null; u.py = null;
+      u.flinch = 0; u.engaged = false; u.faceFoe = null; u.flinchFrom = null; u.bobPhase = i * 1.7;
+      u.cd = {}; u.buffDef = 0; u.buffHit = 0; u.buffTurns = 0;
+      u.bubble = null; u.order = null; u.lastTarget = null; u.lastAbil = null; u.chat = []; u.provoked = false; u.talkedRound = -1;
+      u.ranged = u.abils.some(id => ABIL[id].kind === 'ranged');
+      return u;
+    });
   }
 
   const key = (x, y) => x + ',' + y;
   const inBounds = (x, y) => x >= 0 && y >= 0 && x < GRID && y < GRID;
   const cheb = (x1, y1, x2, y2) => Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2));
   const blockedAt = (x, y) => blocked.has(key(x, y));
+  const effSkill = u => u.skill + (u.buffHit || 0);
+  const effDef = u => u.def + (u.buffDef || 0);
   function neigh8(x, y) { const r = []; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) if (dx || dy) { const nx = x + dx, ny = y + dy; if (inBounds(nx, ny)) r.push([nx, ny]); } return r; }
   function unitAt(x, y) { return units.find(u => u.alive && u.gx === x && u.gy === y) || null; }
-  function tileScreen(x, y) { return { x: OX + (x - y) * TW / 2, y: OY + (x + y) * TH / 2 }; }
-  function screenToTile(mx, my) { const a = (mx - OX) / (TW / 2), b = (my - OY) / (TH / 2); return { x: Math.round((a + b) / 2), y: Math.round((b - a) / 2) }; }
+  function worldPos(x, y) { return { x: (x - y) * TW / 2 + WOX, y: (x + y) * TH / 2 + WOY }; }
+  function tileScreen(x, y) { const w = worldPos(x, y); return { x: w.x - camX, y: w.y - camY }; }
+  function screenToTile(mx, my) { const wx = mx + camX - WOX, wy = my + camY - WOY, a = wx / (TW / 2), b = wy / (TH / 2); return { x: Math.round((a + b) / 2), y: Math.round((b - a) / 2) }; }
 
-  // Линия огня: камень между стрелком и целью её перекрывает (Брезенхэм)
+  function worldBounds() { return { minX: worldPos(0, GRID - 1).x, maxX: worldPos(GRID - 1, 0).x, minY: worldPos(0, 0).y, maxY: worldPos(GRID - 1, GRID - 1).y }; }
+  function clampCam() {
+    const b = worldBounds(), loX = b.minX - 60, hiX = b.maxX + 60 - cv.width, loY = b.minY - 60, hiY = b.maxY + 60 - cv.height;
+    camX = hiX > loX ? Math.max(loX, Math.min(hiX, camX)) : (loX + hiX) / 2;
+    camY = hiY > loY ? Math.max(loY, Math.min(hiY, camY)) : (loY + hiY) / 2;
+  }
+  function centerCam(u) { const w = worldPos(u.gx, u.gy); camX = w.x - cv.width / 2; camY = w.y - cv.height / 2; clampCam(); }
+
   function hasLoS(x0, y0, x1, y1) {
     let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = dx - dy, x = x0, y = y0;
     while (true) {
       if (!(x === x0 && y === y0) && !(x === x1 && y === y1) && blockedAt(x, y)) return false;
       if (x === x1 && y === y1) break;
-      const e2 = 2 * err;
-      if (e2 > -dy) { err -= dy; x += sx; }
-      if (e2 < dx) { err += dx; y += sy; }
+      const e2 = 2 * err; if (e2 > -dy) { err -= dy; x += sx; } if (e2 < dx) { err += dx; y += sy; }
     }
     return true;
   }
-
   function bfs(sx, sy) {
-    const dist = new Map(), prev = new Map(); dist.set(key(sx, sy), 0);
-    const q = [[sx, sy]];
+    const dist = new Map(), prev = new Map(); dist.set(key(sx, sy), 0); const q = [[sx, sy]];
     while (q.length) {
       const [x, y] = q.shift(), d = dist.get(key(x, y));
-      for (const [nx, ny] of neigh8(x, y)) {
-        const k = key(nx, ny);
-        if (dist.has(k) || unitAt(nx, ny) || blockedAt(nx, ny)) continue;
-        dist.set(k, d + 1); prev.set(k, [x, y]); q.push([nx, ny]);
-      }
+      for (const [nx, ny] of neigh8(x, y)) { const k = key(nx, ny); if (dist.has(k) || unitAt(nx, ny) || blockedAt(nx, ny)) continue; dist.set(k, d + 1); prev.set(k, [x, y]); q.push([nx, ny]); }
     }
     return { dist, prev };
   }
-  function buildPath(prev, sx, sy, tx, ty) {
-    const path = [[tx, ty]]; let cur = key(tx, ty);
-    while (cur !== key(sx, sy)) { const p = prev.get(cur); if (!p) return [[sx, sy]]; path.unshift(p); cur = key(p[0], p[1]); }
-    return path;
-  }
-  function computeReach() {
-    reach = new Map(); const { dist } = bfs(active.gx, active.gy);
-    for (const [k, d] of dist) if (d > 0 && d <= moveLeft) reach.set(k, d);
-  }
+  function buildPath(prev, sx, sy, tx, ty) { const path = [[tx, ty]]; let cur = key(tx, ty); while (cur !== key(sx, sy)) { const p = prev.get(cur); if (!p) return [[sx, sy]]; path.unshift(p); cur = key(p[0], p[1]); } return path; }
+  function computeReach() { reach = new Map(); const { dist } = bfs(active.gx, active.gy); for (const [k, d] of dist) if (d > 0 && d <= moveLeft) reach.set(k, d); }
+  function dashReachable(u, t, range) { const { dist } = bfs(u.gx, u.gy); for (const [ax, ay] of neigh8(t.gx, t.gy)) { if (ax === u.gx && ay === u.gy) return true; const k = key(ax, ay); if (dist.has(k) && dist.get(k) <= range) return true; } return false; }
 
-  function log(msg, color) {
-    const el = document.getElementById('log'), d = document.createElement('div');
-    d.textContent = msg; if (color) d.style.color = color; el.prepend(d);
-    while (el.children.length > 40) el.removeChild(el.lastChild);
-  }
-  function floater(u, text, color) { const s = tileScreen(u.gx, u.gy); floaters.push({ x: s.x, y: s.y - 24, text, color, life: 1 }); }
-  function spark(a, b) {
-    const s1 = tileScreen(a.gx, a.gy), s2 = tileScreen(b.gx, b.gy);
-    const mx = (s1.x + s2.x) / 2, my = (s1.y + s2.y) / 2 - 14;
-    for (let i = 0; i < 5; i++) sparks.push({ x: mx, y: my, vx: (Math.random() - .5) * 90, vy: (Math.random() - .5) * 70 - 20, life: 1, color: '#ffe08a' });
-  }
-  function fireProjectile(a, t, onHit) {
-    const s1 = tileScreen(a.gx, a.gy), s2 = tileScreen(t.gx, t.gy);
-    projectiles.push({ x: s1.x, y: s1.y - 22, x0: s1.x, y0: s1.y - 22, x1: s2.x, y1: s2.y - 22, t: 0, onHit });
-  }
+  function log(msg, color) { const el = document.getElementById('log'), d = document.createElement('div'); d.textContent = msg; if (color) d.style.color = color; el.prepend(d); while (el.children.length > 40) el.removeChild(el.lastChild); }
+  function floater(u, text, color) { const w = worldPos(u.gx, u.gy); floaters.push({ wx: w.x, wy: w.y - 24, text, color, life: 1 }); }
+  function spark(a, b) { const s1 = worldPos(a.gx, a.gy), s2 = worldPos(b.gx, b.gy), mx = (s1.x + s2.x) / 2, my = (s1.y + s2.y) / 2 - 14; for (let i = 0; i < 5; i++) sparks.push({ wx: mx, wy: my, vx: (Math.random() - .5) * 90, vy: (Math.random() - .5) * 70 - 20, life: 1, color: '#ffe08a' }); }
+  function fireProjectile(a, t, onHit) { const s1 = worldPos(a.gx, a.gy), s2 = worldPos(t.gx, t.gy); projectiles.push({ x: s1.x, y: s1.y - 22, x0: s1.x, y0: s1.y - 22, x1: s2.x, y1: s2.y - 22, t: 0, onHit }); }
 
-  function resolveAttack(a, t) {
+  function resolveAttack(a, t, ab) {
     const dist = cheb(a.gx, a.gy, t.gx, t.gy);
-    let chance = a.skill - t.def + 15;
-    if (a.range > 1) chance -= Math.max(0, dist - 1) * 2;      // штраф к точности за дистанцию
+    let chance = effSkill(a) - effDef(t) + 15 + (ab.acc || 0);
+    if (ab.kind === 'ranged') chance -= Math.max(0, dist - 1) * 2;
     chance = Math.max(10, Math.min(95, chance));
-    const verb = a.range > 1 ? 'стреляет в' : 'бьёт';
-    if (Math.random() * 100 > chance) { log(`${a.name} промахивается по «${t.name}»`, '#9aa'); floater(t, 'мимо', '#aab'); return; }
-    const dmg = a.dmgMin + Math.floor(Math.random() * (a.dmgMax - a.dmgMin + 1));
+    if (Math.random() * 100 > chance) { log(`${a.name}: ${ab.name} — мимо по «${t.name}»`, '#9aa'); floater(t, 'мимо', '#aab'); return; }
+    const dmg = ab.dmg[0] + Math.floor(Math.random() * (ab.dmg[1] - ab.dmg[0] + 1));
     t.hp = Math.max(0, t.hp - dmg);
-    log(`${a.name} ${verb} «${t.name}»: ${dmg} урона`, a.team === 'player' ? '#ffcf4d' : '#ff8a8a');
-    floater(t, '-' + dmg, '#ff6060');
-    t.flinch = 1; t.flinchFrom = a; spark(a, t);
-    if (t.hp <= 0) { t.alive = false; log(`«${t.name}» повержен!`, '#ff4040'); }
+    log(`${a.name}: ${ab.name} → «${t.name}» ${dmg} урона`, a.team === 'player' ? '#ffcf4d' : '#ff8a8a');
+    floater(t, '-' + dmg, '#ff6060'); t.flinch = 1; t.flinchFrom = a; spark(a, t);
+    if (t.hp <= 0) { t.alive = false; t.bubble = null; log(`«${t.name}» повержен!`, '#ff4040'); }
+  }
+
+  function executeAbility(u, ab, target, done) {
+    u.cd[ab.id] = ab.cd || 0; u.lastAbil = ab.id; if (target) u.lastTarget = target.id; setBubble(u, bark(ab));
+    const finish = () => { renderInspect(); if (checkEnd()) return; if (done) done(); };
+    if (ab.kind === 'self') { u.buffDef += ab.def; u.buffTurns = Math.max(u.buffTurns, 1); log(`${u.name}: ${ab.name} (+${ab.def} защиты)`, '#8fe3c0'); floater(u, '+защита', '#8fe3c0'); finish(); return; }
+    if (ab.kind === 'buffAlly') { const al = units.filter(x => x.alive && x.team === u.team && cheb(u.gx, u.gy, x.gx, x.gy) <= ab.range); al.forEach(x => { x.buffHit += ab.hit; x.buffTurns = Math.max(x.buffTurns, 2); floater(x, '+точность', '#8fe3c0'); }); log(`${u.name}: ${ab.name} — союзники (${al.length}) +${ab.hit} точности`, '#8fe3c0'); finish(); return; }
+    if (ab.kind === 'ranged') { fireProjectile(u, target, () => { resolveAttack(u, target, ab); finish(); }); return; }
+    if (ab.kind === 'attack') { resolveAttack(u, target, ab); finish(); return; }
+    if (ab.kind === 'aoe') { resolveAttack(u, target, ab); neigh8(target.gx, target.gy).forEach(([x, y]) => { const o = unitAt(x, y); if (o && o.alive && o.team !== u.team) resolveAttack(u, o, ab); }); finish(); return; }
+    if (ab.kind === 'dash') {
+      const { dist, prev } = bfs(u.gx, u.gy); let best = null;
+      for (const [ax, ay] of neigh8(target.gx, target.gy)) { if (ax === u.gx && ay === u.gy) { best = { tx: ax, ty: ay, d: 0 }; break; } const k = key(ax, ay); if (dist.has(k) && dist.get(k) <= ab.range && (!best || dist.get(k) < best.d)) best = { tx: ax, ty: ay, d: dist.get(k) }; }
+      if (best && best.d > 0) animateMove(u, buildPath(prev, u.gx, u.gy, best.tx, best.ty), () => { resolveAttack(u, target, ab); finish(); });
+      else { resolveAttack(u, target, ab); finish(); }
+      return;
+    }
+    finish();
   }
 
   function nearestEnemy(u) { let best = null, bd = 99; for (const o of units) if (o.alive && o.team !== u.team) { const d = cheb(u.gx, u.gy, o.gx, o.gy); if (d < bd) { bd = d; best = o; } } return best; }
-
-  // Слой «энгейджа» — ЧИСТО косметический: урон только в свой ход
   function updateEngagement(dt) {
     for (const u of units) {
       if (!u.alive) { u.engaged = false; continue; }
       if (u.flinch > 0) u.flinch = Math.max(0, u.flinch - dt * 4);
-      const foe = nearestEnemy(u);
-      u.engaged = !!(foe && cheb(u.gx, u.gy, foe.gx, foe.gy) <= 1);
-      u.faceFoe = u.engaged ? foe : null;
+      const foe = nearestEnemy(u); u.engaged = !!(foe && cheb(u.gx, u.gy, foe.gx, foe.gy) <= 1); u.faceFoe = u.engaged ? foe : null;
     }
   }
 
   function checkEnd() {
     const hero = units.find(u => u.hero);
-    const enemies = units.filter(u => u.alive && u.team === 'enemy');
-    const allies = units.filter(u => u.alive && u.team === 'player');
-    if (!enemies.length) { finish('ПОБЕДА', '#5cf58a'); return true; }
-    if (!hero.alive || !allies.length) { finish('ПОРАЖЕНИЕ', '#ff5c5c'); return true; }
+    if (!units.some(u => u.alive && u.team === 'enemy')) { finish2('ПОБЕДА', '#5cf58a'); return true; }
+    if (!hero.alive || !units.some(u => u.alive && u.team === 'player')) { finish2('ПОРАЖЕНИЕ', '#ff5c5c'); return true; }
     return false;
   }
-  function finish(text, color) {
-    state = 'over'; document.getElementById('endBtn').disabled = true;
-    const b = document.getElementById('bannerText'); b.textContent = text; b.style.color = color;
-    document.getElementById('banner').style.display = 'flex';
-  }
+  function finish2(text, color) { state = 'over'; document.getElementById('endBtn').disabled = true; renderBar(); const b = document.getElementById('bannerText'); b.textContent = text; b.style.color = color; document.getElementById('banner').style.display = 'flex'; }
 
+  // ---- Умения игрока: цели, панель ----
+  function usableAbils(u) { return u.abils.map(id => ABIL[id]).filter(ab => (u.cd[ab.id] || 0) <= 0); }
+  function abilityTargets(u, ab) {
+    if (!ab || ab.kind === 'self' || ab.kind === 'buffAlly') return [];
+    const res = [];
+    for (const t of units.filter(x => x.alive && x.team !== u.team)) {
+      const d = cheb(u.gx, u.gy, t.gx, t.gy);
+      if (ab.kind === 'dash') { if (dashReachable(u, t, ab.range)) res.push(t); }
+      else if (ab.kind === 'ranged') { if (d <= ab.range && hasLoS(u.gx, u.gy, t.gx, t.gy)) res.push(t); }
+      else { if (d <= ab.range) res.push(t); }
+    }
+    return res;
+  }
+  function renderBar() {
+    const bar = document.getElementById('bar');
+    if (!(state === 'player' && active && active.hero)) { bar.className = 'hidden'; bar.innerHTML = ''; return; }
+    bar.className = ''; bar.innerHTML = '';
+    active.abils.forEach(id => {
+      const ab = ABIL[id], cd = active.cd[id] || 0, b = document.createElement('button');
+      b.className = 'abil' + (selectedAbil === ab ? ' sel' : ''); b.disabled = cd > 0;
+      b.innerHTML = ab.name + (cd > 0 ? ` <small>(КД ${cd})</small>` : '');
+      b.onmouseenter = () => showDesc(ab); b.onclick = () => pickAbility(ab);
+      bar.appendChild(b);
+    });
+  }
+  function showDesc(ab) { document.getElementById('abilInfo').textContent = `${ab.name} — ${ab.desc}` + (ab.dmg ? ` Урон ${ab.dmg[0]}–${ab.dmg[1]}.` : ''); }
+  function pickAbility(ab) {
+    if ((active.cd[ab.id] || 0) > 0 || state !== 'player') return;
+    if (ab.kind === 'self' || ab.kind === 'buffAlly') { doPlayerAbility(ab, null); return; }
+    selectedAbil = (selectedAbil === ab) ? null : ab; showDesc(ab); renderBar();
+  }
+  function doPlayerAbility(ab, target) { selectedAbil = null; state = 'resolving'; document.getElementById('endBtn').disabled = true; renderBar(); executeAbility(active, ab, target, () => setTimeout(endTurn, 220)); }
+
+  function renderInspect() {
+    const u = inspectUnit && inspectUnit.alive ? inspectUnit : (active && active.hero ? active : units.find(x => x.hero));
+    const box = document.getElementById('inspect'); if (!u) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="iname"><span class="dot" style="background:${TEAMS[u.kind].color}"></span>${u.name}${u.hero ? ' ★' : ''}${u.commander ? ' ♛' : ''}${u.ranged ? ' 🏹' : ''}</div>`
+      + `<div class="istat">${u.team === 'player' ? 'на твоей стороне' : (u.commander ? 'вражеский командир' : 'противник')} · HP ${u.hp}/${u.max} · ход ${u.move} · навык ${effSkill(u)} · защита ${effDef(u)}</div>`
+      + `<div class="ilbl">Умения</div>` + u.abils.map(id => { const a = ABIL[id]; return `<div class="iab"><b>${a.name}</b> — ${a.desc}</div>`; }).join('');
+  }
   function renderOrder() {
     const el = document.getElementById('order'); el.innerHTML = '';
     order.forEach(u => {
       const li = document.createElement('li');
-      if (u === active) li.classList.add('active');
-      if (!u.alive) li.classList.add('dead');
-      li.innerHTML = `<span class="dot" style="background:${TEAMS[u.kind].color}"></span>`
-        + `<span class="nm">${u.name}${u.hero ? ' ★' : ''}${u.range > 1 ? ' 🏹' : ''}</span>`
-        + `<span class="hp">${u.hp}/${u.max}</span>`;
+      if (u === active) li.classList.add('active'); if (!u.alive) li.classList.add('dead');
+      li.innerHTML = `<span class="dot" style="background:${TEAMS[u.kind].color}"></span><span class="nm">${u.name}${u.hero ? ' ★' : ''}${u.commander ? ' ♛' : ''}${u.ranged ? ' 🏹' : ''}</span><span class="hp">${u.hp}/${u.max}</span>`;
       el.appendChild(li);
     });
   }
 
   // ---- Ход ----
-  function startRound() {
-    order = units.filter(u => u.alive).sort((a, b) => b.init - a.init);
-    turnPtr = 0; round++; beginTurn();
-  }
+  function tickStart(u) { for (const k in u.cd) if (u.cd[k] > 0) u.cd[k]--; if (u.buffTurns > 0) { u.buffTurns--; if (u.buffTurns <= 0) { u.buffDef = 0; u.buffHit = 0; } } }
+  function startRound() { order = units.filter(u => u.alive).sort((a, b) => b.init - a.init); turnPtr = 0; round++; beginTurn(); }
   function beginTurn() {
     if (turnPtr >= order.length || !order[turnPtr] || !order[turnPtr].alive) { advance(); return; }
-    active = order[turnPtr];
+    active = order[turnPtr]; selectedAbil = null;
+    if (active.bubble) active.bubble = null;
     if (checkEnd()) return;
-    renderOrder();
+    tickStart(active); centerCam(active); renderOrder(); inspectUnit = null; renderInspect();
     if (active.hero) {
       state = 'player'; moveLeft = active.move; computeReach();
       document.getElementById('endBtn').disabled = false;
@@ -229,197 +315,267 @@
       state = 'ai'; reach = null;
       document.getElementById('endBtn').disabled = true;
       document.getElementById('turnInfo').innerHTML = `Ходит «${active.name}» <small>· раунд ${round}</small>`;
-      setTimeout(() => aiTakeTurn(active), 220);
+      setTimeout(() => aiTakeTurn(active), 260);
     }
+    renderBar();
   }
-  function advance() {
-    do { turnPtr++; } while (turnPtr < order.length && (!order[turnPtr] || !order[turnPtr].alive));
-    if (turnPtr >= order.length) startRound(); else beginTurn();
-  }
-  function endTurn() { if (state === 'over') return; active = null; state = 'transition'; document.getElementById('endBtn').disabled = true; advance(); }
+  function advance() { do { turnPtr++; } while (turnPtr < order.length && (!order[turnPtr] || !order[turnPtr].alive)); if (turnPtr >= order.length) startRound(); else beginTurn(); }
+  function endTurn() { if (state === 'over') return; active = null; state = 'transition'; selectedAbil = null; renderBar(); document.getElementById('endBtn').disabled = true; advance(); }
 
-  // ---- ИИ (ближний и дальний бой) ----
-  function aiPlan(u) {
-    const range = u.range || 1;
-    const foes = units.filter(x => x.alive && x.team !== u.team);
+  // ---- ИИ + вражеский командир ----
+  function commanderAlive() { const c = units.find(u => u.commander); return !!(c && c.alive); }
+  function enemyFocusTarget(u) { if (u.team !== 'enemy' || !commanderAlive() || enemyFocus == null) return null; return units.find(x => x.id === enemyFocus && x.alive) || null; }
+  function doCommand(u) {
+    const foes = units.filter(x => x.alive && x.team !== u.team); if (!foes.length) return;
+    const focus = foes.reduce((p, c) => c.hp < p.hp ? c : p);
+    enemyFocus = focus.id; setBubble(u, `Бей: ${focus.name}!`, 'boss');
+    log(`Вожак приказывает: сосредоточить огонь на «${focus.name}»!`, '#ff9a3c');
+    units.filter(x => x.alive && x.team === u.team && !x.commander && cheb(u.gx, u.gy, x.gx, x.gy) <= 8).slice(0, 2).forEach(a => setBubble(a, 'Есть!', 'enemy'));
+  }
+  function aiChooseAction(u) {
+    const abils = usableAbils(u), foes = units.filter(x => x.alive && x.team !== u.team);
     if (!foes.length) return null;
 
-    if (range > 1) {
-      const canHit = foes.filter(f => cheb(u.gx, u.gy, f.gx, f.gy) <= range && hasLoS(u.gx, u.gy, f.gx, f.gy));
-      if (canHit.length) { const tgt = canHit.reduce((p, c) => c.hp < p.hp ? c : p); return { path: [[u.gx, u.gy]], attack: tgt, ranged: true }; }
-      const { dist, prev } = bfs(u.gx, u.gy);
-      let best = null;
-      for (const [k, d] of dist) {
-        if (d > u.move) continue; const [x, y] = k.split(',').map(Number);
-        for (const f of foes) if (cheb(x, y, f.gx, f.gy) <= range && hasLoS(x, y, f.gx, f.gy)) { if (!best || d < best.d) best = { x, y, foe: f, d }; }
-      }
-      if (best) return { path: buildPath(prev, u.gx, u.gy, best.x, best.y), attack: best.foe, ranged: true };
-      // выстрел не получить — подходим ближе (общая логика ниже)
+    if (u.order === 'retreat') {
+      u.order = null; const { dist, prev } = bfs(u.gx, u.gy), nf = nearestEnemy(u); let best = null;
+      for (const [k, d] of dist) { if (d === 0 || d > u.move) continue; const [x, y] = k.split(',').map(Number); const h = cheb(x, y, nf.gx, nf.gy); if (!best || h > best.h) best = { x, y, h }; }
+      if (best) return { ability: null, target: undefined, path: buildPath(prev, u.gx, u.gy, best.x, best.y) };
     }
+    const avoidId = u.order === 'switch' ? u.lastTarget : null, avoidAbil = u.order === 'other' ? u.lastAbil : null; u.order = null;
+    const focusT = enemyFocusTarget(u);
+    const heroU = units.find(x => x.hero && x.alive);
+    const forced = (u.provoked && heroU) ? heroU : null; u.provoked = false;
+    const choose = arr => { let l = arr; if (avoidId != null && l.length > 1) { const f = l.filter(c => c.id !== avoidId); if (f.length) l = f; } if (forced && l.indexOf(forced) >= 0) return forced; if (focusT && l.indexOf(focusT) >= 0) return focusT; return l.reduce((p, c) => c.hp < p.hp ? c : p); };
+    const pickAbil = pool => { if (avoidAbil && pool.length > 1) { const f = pool.filter(a => a.id !== avoidAbil); if (f.length) return f[0]; } return pool[0]; };
 
-    const { dist, prev } = bfs(u.gx, u.gy);
-    let best = null;
-    for (const f of foes) for (const [ax, ay] of neigh8(f.gx, f.gy)) {
-      let d; if (ax === u.gx && ay === u.gy) d = 0; else if (dist.has(key(ax, ay))) d = dist.get(key(ax, ay)); else continue;
-      if (!best || d < best.d) best = { d, tx: ax, ty: ay, foe: f };
+    const ranged = abils.filter(a => a.kind === 'ranged').sort((a, b) => b.acc - a.acc);
+    const melee = abils.filter(a => a.kind === 'attack' || a.kind === 'aoe').sort((a, b) => b.dmg[1] - a.dmg[1]);
+    const selfAb = abils.find(a => a.kind === 'self');
+    const adj = foes.filter(f => cheb(u.gx, u.gy, f.gx, f.gy) <= 1);
+    const canShoot = ab => foes.filter(f => cheb(u.gx, u.gy, f.gx, f.gy) <= ab.range && hasLoS(u.gx, u.gy, f.gx, f.gy));
+
+    if (u.commander && !adj.length) return selfAb ? { ability: selfAb, target: null, path: [[u.gx, u.gy]] } : { ability: null, target: undefined, path: [[u.gx, u.gy]] };
+    if (selfAb && u.hp < 0.32 * u.max && !adj.length && !ranged.some(a => canShoot(a).length)) return { ability: selfAb, target: null, path: [[u.gx, u.gy]] };
+    for (const ab of ranged) { const t = canShoot(ab); if (t.length) return { ability: ab, target: choose(t), path: [[u.gx, u.gy]] }; }
+    if (adj.length && melee.length) return { ability: pickAbil(melee), target: choose(adj), path: [[u.gx, u.gy]] };
+    const dash = abils.find(a => a.kind === 'dash');
+    if (dash) { const t = foes.filter(f => dashReachable(u, f, dash.range)); if (t.length) return { ability: dash, target: choose(t), path: [[u.gx, u.gy]] }; }
+    if (ranged.length) {
+      const ab = ranged.slice().sort((a, b) => b.range - a.range)[0], { dist, prev } = bfs(u.gx, u.gy); let best = null;
+      for (const [k, d] of dist) { if (d > u.move) continue; const [x, y] = k.split(',').map(Number); for (const f of foes) if (cheb(x, y, f.gx, f.gy) <= ab.range && hasLoS(x, y, f.gx, f.gy) && (!best || d < best.d)) best = { x, y, f, d }; }
+      if (best) return { ability: ab, target: best.f, path: buildPath(prev, u.gx, u.gy, best.x, best.y) };
     }
-    if (best) {
-      let path = (best.tx === u.gx && best.ty === u.gy) ? [[u.gx, u.gy]] : buildPath(prev, u.gx, u.gy, best.tx, best.ty);
-      if (path.length - 1 > u.move) path = path.slice(0, u.move + 1);
-      const e = path[path.length - 1];
-      return { path, attack: cheb(e[0], e[1], best.foe.gx, best.foe.gy) <= 1 ? best.foe : null, ranged: false };
-    }
-    const nf = foes.reduce((p, c) => cheb(u.gx, u.gy, c.gx, c.gy) < cheb(u.gx, u.gy, p.gx, p.gy) ? c : p);
-    let bt = null;
-    for (const [k, d] of dist) { if (d === 0 || d > u.move) continue; const [x, y] = k.split(',').map(Number); const h = cheb(x, y, nf.gx, nf.gy); if (!bt || h < bt.h || (h === bt.h && d < bt.d)) bt = { x, y, h, d }; }
-    if (bt) return { path: buildPath(prev, u.gx, u.gy, bt.x, bt.y), attack: null, ranged: false };
+    const { dist, prev } = bfs(u.gx, u.gy); let best = null;
+    const approach = forced ? [forced] : (focusT ? [focusT] : foes);
+    for (const f of approach) for (const [ax, ay] of neigh8(f.gx, f.gy)) { let d; if (ax === u.gx && ay === u.gy) d = 0; else if (dist.has(key(ax, ay))) d = dist.get(key(ax, ay)); else continue; if (!best || d < best.d) best = { d, tx: ax, ty: ay, f }; }
+    if (!best) for (const f of foes) for (const [ax, ay] of neigh8(f.gx, f.gy)) { let d; if (ax === u.gx && ay === u.gy) d = 0; else if (dist.has(key(ax, ay))) d = dist.get(key(ax, ay)); else continue; if (!best || d < best.d) best = { d, tx: ax, ty: ay, f }; }
+    if (best) { let path = best.d === 0 ? [[u.gx, u.gy]] : buildPath(prev, u.gx, u.gy, best.tx, best.ty); if (path.length - 1 > u.move) path = path.slice(0, u.move + 1); const e = path[path.length - 1], canHit = cheb(e[0], e[1], best.f.gx, best.f.gy) <= 1 && melee.length; return { ability: canHit ? pickAbil(melee) : null, target: canHit ? best.f : undefined, path }; }
+    if (selfAb) return { ability: selfAb, target: null, path: [[u.gx, u.gy]] };
     return null;
   }
   function aiTakeTurn(u) {
     if (state === 'over') return;
-    const plan = aiPlan(u);
-    if (!plan) { endTurn(); return; }
-    const finishTurn = () => { renderOrder(); setTimeout(endTurn, 260); };
-    const attack = () => {
-      if (state === 'over') return;
-      if (plan.attack && plan.attack.alive) {
-        if (plan.ranged) { fireProjectile(u, plan.attack, () => { resolveAttack(u, plan.attack); finishTurn(); }); return; }
-        resolveAttack(u, plan.attack);
-      }
-      finishTurn();
-    };
-    if (plan.path && plan.path.length > 1) animateMove(u, plan.path, () => setTimeout(attack, 90));
-    else attack();
+    if (u.commander) doCommand(u);
+    const act = aiChooseAction(u);
+    if (!act) { endTurn(); return; }
+    const go = () => { if (state === 'over') return; if (act.ability && act.target !== undefined) executeAbility(u, act.ability, act.target, () => { renderOrder(); setTimeout(endTurn, 240); }); else { renderOrder(); setTimeout(endTurn, 240); } };
+    if (act.path && act.path.length > 1) animateMove(u, act.path, () => setTimeout(go, 80)); else go();
   }
 
-  // ---- Анимация перемещения ----
-  function animateMove(u, path, done) {
-    u.gx = path[path.length - 1][0]; u.gy = path[path.length - 1][1];
-    anim = { u, path, idx: 0, t: 0, done };
+  // ---- Приказы игрока (клик по реплике) ----
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const LINES = {
+    hero:      { praise:['Идём до конца.','Я поведу.'], banter:['Пока живы — деремся.','Держим строй.'] },
+    veteran:   { praise:['Служу, командир!','Ещё повоюем!'], praise_hurt:['Пока дышу — держусь в строю.'],
+                 retreat:['Отхожу, но не бегу.','Понял. Отступаю с боем.'], switch:['Новую цель — принято.','Как скажешь, командир.'],
+                 other:['Сменю приём.','Иначе так иначе.'] },
+    sniper:    { praise:['Принято. Не подведу.','Каждая стрела — в цель.'], praise_hurt:['Рука дрожит… но бью точно.'],
+                 retreat:['Меняю позицию.','Отхожу на дистанцию.'], switch:['Беру другого на мушку.','Цель сменил.'],
+                 other:['Сменю приём.','Ладно.'] },
+    commander: { provoked:['Дерзость. Ты за неё заплатишь.','Ко мне — и я покажу тебе смерть.'], scoff:['Слова труса.','Мои воины сотрут тебя в пыль.'], waver:['Держать строй… держать!','Нет. Мы не дрогнем!'] },
+    sneer:     { provoked:['Что ж — лови стрелу в глаз!','Ну подойди, подойди…'], scoff:['Пустые слова.','Болтай, болтай, покойник.'], waver:['Мне… не выстоять?','Проклятье. Руки трясутся…'] },
+    cocky:     { provoked:['Ха! С радостью тебя выпотрошу!','Беги сюда, герой!'], scoff:['Ты? Меня? Смешно.','Пф. Возвращайся к мамке.'], waver:['Чёрт… так не должно быть.','Не так я это представлял…'] },
+    brute:     { provoked:['ГРРР! РАЗДАВЛЮ!','Иди. Сюда. Сейчас.'], scoff:['МАЛ. ГОВОРИШЬ МНОГО.','Пусто.'], waver:['Больно… но злой!','Р-р-р… не сдамся…'] },
+    default:   { praise:['…'], banter:['…'], provoked:['…'], scoff:['…'], waver:['…'], retreat:['…'], switch:['…'], other:['…'] },
+  };
+  function respond(u, outcome) {
+    const v = LINES[u.voice] || LINES.default, hurt = u.hp < 0.4 * u.max;
+    const pool = (hurt && v[outcome + '_hurt']) || v[outcome] || LINES.default[outcome] || ['…'];
+    return pick(pool);
   }
+  function optionsFor(u) {
+    if (u.talkedRound === round) return null;
+    if (u.team !== 'player') {
+      const weak = u.hp < 0.5 * u.max;
+      return [
+        { label: '«Иди сюда, трус!»', note: 'Раздразнить: в свой ход бросится на твоего героя, забыв приказ Вожака.', kind: 'provoke' },
+        { label: weak ? '«Тебе не выстоять — беги, пока можешь.»' : '«Ты труп, просто ещё не знаешь.»', note: 'Устрашить: раненый — дрогнет (−точности на 2 хода); полный сил — лишь усмехнётся.', kind: 'intimidate' },
+      ];
+    }
+    if (u.hero) return [
+      { label: '«Соберись. Веди их за собой.»', note: 'Настрой: +8 к точности на 2 хода.', kind: 'praise' },
+      { label: '«Ещё держимся?»', note: 'Просто слова — без эффекта.', kind: 'banter' },
+    ];
+    return [
+      { label: '«Отличная работа — так держать!»', note: 'Похвала: боевой дух, +8 к точности на 2 хода.', kind: 'praise' },
+      { label: '«Отходи, не геройствуй — сохрани себя.»', note: 'В свой следующий ход отступит подальше от врага и не станет атаковать.', kind: 'retreat' },
+      { label: '«Оставь этого — бей другого!»', note: 'В следующей атаке сменит цель, если рядом есть другая.', kind: 'switch' },
+      { label: '«Смени подход, действуй иначе.»', note: 'В свой следующий ход не станет повторять прошлое умение.', kind: 'other' },
+    ];
+  }
+  function chooseOption(u, opt) {
+    u.chat.push({ from: 'you', text: opt.label });
+    let resp;
+    switch (opt.kind) {
+      case 'praise': u.buffHit += 8; u.buffTurns = Math.max(u.buffTurns, 2); resp = respond(u, 'praise'); break;
+      case 'banter': resp = respond(u, 'banter'); break;
+      case 'retreat': u.order = 'retreat'; resp = respond(u, 'retreat'); break;
+      case 'switch': u.order = 'switch'; resp = respond(u, 'switch'); break;
+      case 'other': u.order = 'other'; resp = respond(u, 'other'); break;
+      case 'provoke': u.provoked = true; resp = respond(u, 'provoked'); log(`«${u.name}» раздразнён — рвётся к твоему герою!`, '#ff9a3c'); break;
+      case 'intimidate':
+        if (u.hp < 0.5 * u.max) { u.buffHit -= 10; u.buffTurns = Math.max(u.buffTurns, 2); resp = respond(u, 'waver'); log(`«${u.name}» дрогнул — точность снижена.`, '#8fe3c0'); }
+        else resp = respond(u, 'scoff');
+        break;
+      default: resp = '…';
+    }
+    u.chat.push({ from: 'them', text: resp });
+    setBubble(u, resp, u.team === 'player' ? 'ally' : (u.commander ? 'boss' : 'enemy'));
+    u.talkedRound = round; renderCmd(u);
+  }
+  function renderCmd(u) {
+    document.getElementById('cmdName').innerHTML = `<span class="dot" style="background:${TEAMS[u.kind].color}"></span>${u.name}${u.commander ? ' ♛' : ''} — ${u.team === 'player' ? 'твой боец' : 'противник'}`;
+    const chat = document.getElementById('cmdChat');
+    chat.innerHTML = u.chat.length ? u.chat.map(m => `<div class="msg ${m.from}"><b>${m.from === 'you' ? 'Ты' : u.name}:</b> ${m.text}</div>`).join('') : '<div class="msg empty">Ещё ни слова не сказано.</div>';
+    const opts = document.getElementById('cmdOpts'); opts.innerHTML = '';
+    const list = optionsFor(u);
+    if (!list) { opts.innerHTML = '<div class="msg empty" style="padding:6px 2px">— В этот ход разговор окончен. —</div>'; }
+    else list.forEach(opt => { const b = document.createElement('button'); b.className = 'opt'; b.innerHTML = `<span class="ol">${opt.label}</span><span class="on">${opt.note}</span>`; b.onclick = () => chooseOption(u, opt); opts.appendChild(b); });
+    chat.scrollTop = chat.scrollHeight;
+  }
+  function openCommand(u) { renderCmd(u); document.getElementById('cmd').style.display = 'flex'; }
+  function closeCommand() { document.getElementById('cmd').style.display = 'none'; }
+
+  // ---- Анимация ----
+  function animateMove(u, path, done) { u.gx = path[path.length - 1][0]; u.gy = path[path.length - 1][1]; anim = { u, path, idx: 0, t: 0, done }; }
   function updateAnim(dt) {
-    if (!anim) return;
-    anim.t += dt * 10;
+    if (!anim) return; anim.t += dt * 9;
     if (anim.t >= 1) { anim.t = 0; anim.idx++; if (anim.idx >= anim.path.length - 1) { const d = anim.done; anim.u.px = anim.u.py = null; anim = null; if (d) d(); return; } }
-    const a = tileScreen(anim.path[anim.idx][0], anim.path[anim.idx][1]);
-    const b = tileScreen(anim.path[anim.idx + 1][0], anim.path[anim.idx + 1][1]);
+    const a = worldPos(anim.path[anim.idx][0], anim.path[anim.idx][1]), b = worldPos(anim.path[anim.idx + 1][0], anim.path[anim.idx + 1][1]);
     anim.u.px = a.x + (b.x - a.x) * anim.t; anim.u.py = a.y + (b.y - a.y) * anim.t;
   }
-  function updateProjectiles(dt) {
-    for (const p of projectiles) {
-      p.t += dt * 2.4;
-      if (p.t >= 1) { const cb = p.onHit; p.done = true; if (cb) cb(); }
-      else { p.x = p.x0 + (p.x1 - p.x0) * p.t; p.y = p.y0 + (p.y1 - p.y0) * p.t; }
-    }
-    projectiles = projectiles.filter(p => !p.done);
-  }
+  function updateProjectiles(dt) { for (const p of projectiles) { p.t += dt * 2.4; if (p.t >= 1) { p.done = true; if (p.onHit) p.onHit(); } else { p.x = p.x0 + (p.x1 - p.x0) * p.t; p.y = p.y0 + (p.y1 - p.y0) * p.t; } } projectiles = projectiles.filter(p => !p.done); }
 
   // ---- Ввод ----
-  cv.addEventListener('mousemove', e => { const r = cv.getBoundingClientRect(); hoverTile = screenToTile(e.clientX - r.left, e.clientY - r.top); });
-  cv.addEventListener('mouseleave', () => hoverTile = null);
+  cv.addEventListener('mousemove', e => { const r = cv.getBoundingClientRect(); hoverTile = screenToTile(e.clientX - r.left, e.clientY - r.top); const u = unitAt(hoverTile.x, hoverTile.y); if (u !== inspectUnit) { inspectUnit = u; renderInspect(); } });
+  cv.addEventListener('mouseleave', () => { hoverTile = null; });
+  cv.addEventListener('mousedown', e => { panning = true; dragging = false; lastPX = e.clientX; lastPY = e.clientY; });
+  window.addEventListener('mousemove', e => { if (!panning) return; const dx = e.clientX - lastPX, dy = e.clientY - lastPY; if (dragging || Math.abs(dx) + Math.abs(dy) > 3) { dragging = true; camX -= dx; camY -= dy; clampCam(); lastPX = e.clientX; lastPY = e.clientY; } });
+  window.addEventListener('mouseup', () => { panning = false; setTimeout(() => dragging = false, 0); });
+  cv.addEventListener('wheel', e => { e.preventDefault(); if (e.shiftKey) camX += e.deltaY; else { camY += e.deltaY; camX += e.deltaX; } clampCam(); }, { passive: false });
+  window.addEventListener('keydown', e => { const s = 70; if (e.key === 'ArrowLeft') camX -= s; else if (e.key === 'ArrowRight') camX += s; else if (e.key === 'ArrowUp') camY -= s; else if (e.key === 'ArrowDown') camY += s; else return; e.preventDefault(); clampCam(); });
+
+  function bubbleAt(mx, my) { for (const u of units) { if (u.alive && u.bubble && u.bubble._rect) { const R = u.bubble._rect; if (mx >= R.x && mx <= R.x + R.w && my >= R.y && my <= R.y + R.h) return u; } } return null; }
   cv.addEventListener('click', e => {
+    if (dragging || state === 'over') return;
+    const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    const bu = bubbleAt(mx, my); if (bu) { openCommand(bu); return; }
     if (state !== 'player' || anim) return;
-    const r = cv.getBoundingClientRect(); const t = screenToTile(e.clientX - r.left, e.clientY - r.top);
-    if (!inBounds(t.x, t.y)) return;
-    const target = unitAt(t.x, t.y);
-    if (target && target.team === 'enemy' && cheb(active.gx, active.gy, t.x, t.y) <= active.range) {
-      document.getElementById('endBtn').disabled = true;
-      resolveAttack(active, target); renderOrder(); setTimeout(endTurn, 220); return;
-    }
-    if (!target && reach && reach.has(key(t.x, t.y))) {
-      const { prev } = bfs(active.gx, active.gy);
-      const path = buildPath(prev, active.gx, active.gy, t.x, t.y);
-      const steps = path.length - 1;
-      animateMove(active, path, () => { moveLeft -= steps; computeReach(); });
-    }
+    const t = screenToTile(mx, my); if (!inBounds(t.x, t.y)) return;
+    if (selectedAbil) { const tgt = unitAt(t.x, t.y); if (tgt && abilityTargets(active, selectedAbil).includes(tgt)) doPlayerAbility(selectedAbil, tgt); else { selectedAbil = null; renderBar(); } return; }
+    if (!unitAt(t.x, t.y) && reach && reach.has(key(t.x, t.y))) { const { prev } = bfs(active.gx, active.gy), path = buildPath(prev, active.gx, active.gy, t.x, t.y), steps = path.length - 1; animateMove(active, path, () => { moveLeft -= steps; computeReach(); }); }
   });
   document.getElementById('endBtn').addEventListener('click', endTurn);
   document.getElementById('restartBtn').addEventListener('click', initBattle);
   document.getElementById('bannerBtn').addEventListener('click', initBattle);
+  document.getElementById('cmdClose').addEventListener('click', closeCommand);
+  document.getElementById('cmd').addEventListener('click', e => { if (e.target.id === 'cmd') closeCommand(); });
 
   // ---- Отрисовка ----
-  function tilePoly(x, y, lift) {
-    const s = tileScreen(x, y); const o = lift || 0;
-    ctx.beginPath();
-    ctx.moveTo(s.x, s.y - TH / 2 - o); ctx.lineTo(s.x + TW / 2, s.y - o); ctx.lineTo(s.x, s.y + TH / 2 - o); ctx.lineTo(s.x - TW / 2, s.y - o); ctx.closePath();
-  }
+  function tilePoly(x, y) { const s = tileScreen(x, y); ctx.beginPath(); ctx.moveTo(s.x, s.y - TH / 2); ctx.lineTo(s.x + TW / 2, s.y); ctx.lineTo(s.x, s.y + TH / 2); ctx.lineTo(s.x - TW / 2, s.y); ctx.closePath(); }
+  function onScreen(s) { return s.x > -TW && s.x < cv.width + TW && s.y > -TH * 4 && s.y < cv.height + TH * 4; }
+  function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
   function drawObstacle(x, y) {
-    const s = tileScreen(x, y), h = 16;
-    const T = { x: s.x, y: s.y - TH / 2 }, R = { x: s.x + TW / 2, y: s.y }, B = { x: s.x, y: s.y + TH / 2 }, L = { x: s.x - TW / 2, y: s.y };
+    const s = tileScreen(x, y), h = 15, T = { x: s.x, y: s.y - TH / 2 }, R = { x: s.x + TW / 2, y: s.y }, B = { x: s.x, y: s.y + TH / 2 }, L = { x: s.x - TW / 2, y: s.y };
     ctx.fillStyle = '#2b3048'; ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(B.x, B.y); ctx.lineTo(B.x, B.y - h); ctx.lineTo(L.x, L.y - h); ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#232840'; ctx.beginPath(); ctx.moveTo(R.x, R.y); ctx.lineTo(B.x, B.y); ctx.lineTo(B.x, B.y - h); ctx.lineTo(R.x, R.y - h); ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#3c4468'; ctx.beginPath(); ctx.moveTo(T.x, T.y - h); ctx.lineTo(R.x, R.y - h); ctx.lineTo(B.x, B.y - h); ctx.lineTo(L.x, L.y - h); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = '#4a5578'; ctx.lineWidth = 1; ctx.stroke();
   }
   function drawUnit(u) {
-    const s = (u.px != null) ? { x: u.px, y: u.py } : tileScreen(u.gx, u.gy);
-    if (u.px == null && u.engaged && state !== 'over') {
-      if (u !== active) {
-        s.x += Math.cos(now / 700 + u.bobPhase) * 1.3; s.y += Math.sin(now / 260 + u.bobPhase) * 1.1;
-        if (u.faceFoe) { const b = tileScreen(u.faceFoe.gx, u.faceFoe.gy); const dx = b.x - s.x, dy = b.y - s.y, L = Math.hypot(dx, dy) || 1; const feint = Math.pow(Math.max(0, Math.sin(now / 1100 + u.bobPhase * 2)), 8) * 4; s.x += dx / L * feint; s.y += dy / L * feint * 0.7; }
-      }
-      if (u.flinch > 0 && u.flinchFrom) { const b = tileScreen(u.flinchFrom.gx, u.flinchFrom.gy); const dx = s.x - b.x, dy = s.y - b.y, L = Math.hypot(dx, dy) || 1; s.x += dx / L * 4 * u.flinch; s.y += dy / L * 3 * u.flinch; }
+    const base = (u.px != null) ? { x: u.px - camX, y: u.py - camY } : tileScreen(u.gx, u.gy), s = { x: base.x, y: base.y };
+    if (u.px == null && state !== 'over' && u !== active) {
+      s.x += Math.cos(now / 800 + u.bobPhase) * 1.0; s.y += Math.sin(now / 300 + u.bobPhase) * 0.9;
+      if (u.engaged && u.faceFoe) { const b = tileScreen(u.faceFoe.gx, u.faceFoe.gy), dx = b.x - s.x, dy = b.y - s.y, L = Math.hypot(dx, dy) || 1, f = Math.pow(Math.max(0, Math.sin(now / 1100 + u.bobPhase * 2)), 8) * 4; s.x += dx / L * f; s.y += dy / L * f * 0.7; }
     }
+    if (u.flinch > 0 && u.flinchFrom) { const b = tileScreen(u.flinchFrom.gx, u.flinchFrom.gy), dx = s.x - b.x, dy = s.y - b.y, L = Math.hypot(dx, dy) || 1; s.x += dx / L * 4 * u.flinch; s.y += dy / L * 3 * u.flinch; }
     const t = TEAMS[u.kind];
     ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(s.x, s.y + 4, 13, 6, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = t.color; ctx.strokeStyle = t.edge; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(s.x - 8, s.y + 2); ctx.lineTo(s.x - 6, s.y - 18); ctx.lineTo(s.x + 6, s.y - 18); ctx.lineTo(s.x + 8, s.y + 2); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.beginPath(); ctx.arc(s.x, s.y - 23, 5.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     if (u.hero) { ctx.fillStyle = '#fff6cf'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('★', s.x, s.y - 31); }
-    if (u.range > 1) { ctx.strokeStyle = '#e8e8f0'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(s.x + 11, s.y - 22, 6, -0.7, 0.7); ctx.stroke(); }
-    if (u.engaged && u.faceFoe && state !== 'over') {
-      const dir = Math.sign(tileScreen(u.faceFoe.gx, u.faceFoe.gy).x - tileScreen(u.gx, u.gy).x) || 1;
-      ctx.strokeStyle = t.edge; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(s.x + dir * 6, s.y - 12); ctx.lineTo(s.x + dir * 13, s.y - 19); ctx.stroke();
-    }
+    if (u.commander) { ctx.fillStyle = '#ffcf4d'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('♛', s.x, s.y - 31); }
+    if (u.ranged) { ctx.strokeStyle = '#e8e8f0'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(s.x + 11, s.y - 22, 6, -0.7, 0.7); ctx.stroke(); }
+    if (u.buffDef > 0) { ctx.strokeStyle = '#8fe3c0'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(s.x - 11, s.y - 20, 5, 2.4, 5.4); ctx.stroke(); }
     const w = 24, hpw = w * (u.hp / u.max);
     ctx.fillStyle = '#000'; ctx.fillRect(s.x - w / 2, s.y - 40, w, 4);
     ctx.fillStyle = u.team === 'player' ? '#5cf58a' : '#ff5c5c'; ctx.fillRect(s.x - w / 2, s.y - 40, hpw, 4);
   }
+  function drawBubble(u) {
+    const b = u.bubble, base = (u.px != null) ? { x: u.px - camX, y: u.py - camY } : tileScreen(u.gx, u.gy);
+    ctx.font = '12px -apple-system, Segoe UI, sans-serif';
+    const w = ctx.measureText(b.text).width + 16, h = 22, x = base.x - w / 2, y = base.y - 64 - h;
+    const alpha = Math.max(0.1, 1 - (now - b.birth) / 9000); ctx.globalAlpha = alpha;
+    const col = b.kind === 'enemy' ? '#ff6b6b' : b.kind === 'ally' ? '#7fe3b0' : b.kind === 'boss' ? '#ff9a3c' : '#aeb7e6';
+    roundRect(x, y, w, h, 6); ctx.fillStyle = 'rgba(12,15,28,.95)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(base.x - 5, y + h); ctx.lineTo(base.x + 5, y + h); ctx.lineTo(base.x, y + h + 7); ctx.closePath(); ctx.fillStyle = 'rgba(12,15,28,.95)'; ctx.fill();
+    ctx.fillStyle = '#e8e8f0'; ctx.textAlign = 'center'; ctx.fillText(b.text, base.x, y + 15);
+    ctx.globalAlpha = 1; b._rect = { x, y, w, h };
+  }
   function draw() {
     ctx.clearRect(0, 0, cv.width, cv.height);
+    const tgts = (state === 'player' && selectedAbil) ? abilityTargets(active, selectedAbil) : null;
     for (let x = 0; x < GRID; x++) for (let y = 0; y < GRID; y++) {
-      if (blockedAt(x, y)) continue;
+      if (blockedAt(x, y)) continue; const s = tileScreen(x, y); if (!onScreen(s)) continue;
       let fill = ((x + y) % 2 === 0) ? '#1a2035' : '#151a2c', stroke = '#232a45';
-      if (reach && reach.has(key(x, y))) { fill = '#243a55'; stroke = '#3d6fa0'; }
+      if (!selectedAbil && reach && reach.has(key(x, y))) { fill = '#243a55'; stroke = '#3d6fa0'; }
       if (hoverTile && hoverTile.x === x && hoverTile.y === y) stroke = '#ffcf4d';
       tilePoly(x, y); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke();
     }
     if (active) { tilePoly(active.gx, active.gy); const p = 0.5 + 0.5 * Math.sin(now / 250); ctx.strokeStyle = active.hero ? `rgba(255,207,77,${p})` : `rgba(255,120,120,${p})`; ctx.lineWidth = 2; ctx.stroke(); }
-    if (state === 'player') units.forEach(u => { if (u.alive && u.team === 'enemy' && cheb(active.gx, active.gy, u.gx, u.gy) <= active.range) { tilePoly(u.gx, u.gy); ctx.fillStyle = 'rgba(255,80,80,.22)'; ctx.fill(); ctx.strokeStyle = '#ff5c5c'; ctx.stroke(); } });
+    if (tgts) tgts.forEach(t => { tilePoly(t.gx, t.gy); ctx.fillStyle = 'rgba(255,80,80,.25)'; ctx.fill(); ctx.strokeStyle = '#ff7070'; ctx.lineWidth = 2; ctx.stroke(); });
 
     const draws = [];
-    for (const [x, y] of OBSTACLES) draws.push({ depth: x + y, kind: 'obs', x, y });
-    for (const u of units) if (u.alive) draws.push({ depth: u.gx + u.gy, kind: 'unit', u });
+    for (const [x, y] of OBSTACLES) draws.push({ depth: x + y, obs: true, x, y });
+    for (const u of units) if (u.alive) draws.push({ depth: u.gx + u.gy, u });
     draws.sort((a, b) => a.depth - b.depth);
-    for (const d of draws) { if (d.kind === 'obs') drawObstacle(d.x, d.y); else drawUnit(d.u); }
+    for (const d of draws) { if (d.obs) { const s = tileScreen(d.x, d.y); if (onScreen(s)) drawObstacle(d.x, d.y); } else drawUnit(d.u); }
+    for (const u of units) if (u.alive && u.bubble) drawBubble(u);
 
-    for (const p of projectiles) { ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 2; const bx = p.x - (p.x1 - p.x0) * 0.04, by = p.y - (p.y1 - p.y0) * 0.04; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(p.x, p.y); ctx.stroke(); }
-    for (const sp of sparks) { ctx.globalAlpha = Math.max(0, sp.life); ctx.fillStyle = sp.color; ctx.fillRect(sp.x - 1.5, sp.y - 1.5, 3, 3); }
+    for (const p of projectiles) { ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 2; const bx = p.x - (p.x1 - p.x0) * 0.04, by = p.y - (p.y1 - p.y0) * 0.04; ctx.beginPath(); ctx.moveTo(bx - camX, by - camY); ctx.lineTo(p.x - camX, p.y - camY); ctx.stroke(); }
+    for (const sp of sparks) { ctx.globalAlpha = Math.max(0, sp.life); ctx.fillStyle = sp.color; ctx.fillRect(sp.wx - camX - 1.5, sp.wy - camY - 1.5, 3, 3); }
     ctx.globalAlpha = 1;
-    for (const f of floaters) { ctx.globalAlpha = Math.max(0, f.life); ctx.fillStyle = f.color; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(f.text, f.x, f.y); }
+    for (const f of floaters) { ctx.globalAlpha = Math.max(0, f.life); ctx.fillStyle = f.color; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(f.text, f.wx - camX, f.wy - camY); }
     ctx.globalAlpha = 1;
   }
 
   let lastT = 0;
   function loop(t) {
     const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t; now = t;
-    updateAnim(dt);
-    updateProjectiles(dt);
+    updateAnim(dt); updateProjectiles(dt);
     if (state !== 'over') updateEngagement(dt);
-    for (const f of floaters) { f.y -= 22 * dt; f.life -= dt * 1.1; }
-    floaters = floaters.filter(f => f.life > 0);
-    for (const sp of sparks) { sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.vy += 160 * dt; sp.life -= dt * 2.2; }
-    sparks = sparks.filter(sp => sp.life > 0);
-    draw();
-    requestAnimationFrame(loop);
+    // реплики живут (плавно тускнея) до начала своего хода или гибели — таймера нет
+    for (const f of floaters) { f.wy -= 22 * dt; f.life -= dt * 1.1; } floaters = floaters.filter(f => f.life > 0);
+    for (const sp of sparks) { sp.wx += sp.vx * dt; sp.wy += sp.vy * dt; sp.vy += 160 * dt; sp.life -= dt * 2.2; } sparks = sparks.filter(sp => sp.life > 0);
+    draw(); requestAnimationFrame(loop);
   }
 
   function initBattle() {
-    units = makeUnits(); round = 0; active = null; anim = null; floaters = []; sparks = []; projectiles = []; reach = null; state = 'init';
+    units = makeUnits(); round = 0; active = null; anim = null; floaters = []; sparks = []; projectiles = []; reach = null; state = 'init'; selectedAbil = null; inspectUnit = null; enemyFocus = null;
     blocked = new Set(OBSTACLES.map(([x, y]) => key(x, y)));
-    document.getElementById('banner').style.display = 'none';
-    document.getElementById('log').innerHTML = '';
-    log('Бой начинается!', '#ffcf4d');
+    document.getElementById('banner').style.display = 'none'; document.getElementById('cmd').style.display = 'none';
+    document.getElementById('log').innerHTML = ''; log('Бой начинается!', '#ffcf4d');
     startRound();
   }
 
