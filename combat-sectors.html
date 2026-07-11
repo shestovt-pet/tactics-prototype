@@ -43,6 +43,7 @@
       <div class="row" style="margin-bottom:6px"><span style="font-size:12px;opacity:.6;width:52px">Наши</span><button class="cnt" data-side="A" data-n="1">1</button><button class="cnt" data-side="A" data-n="2">2</button><button class="cnt" data-side="A" data-n="3">3</button></div>
       <div class="row"><span style="font-size:12px;opacity:.6;width:52px">Враги</span><button class="cnt" data-side="B" data-n="1">1</button><button class="cnt" data-side="B" data-n="2">2</button><button class="cnt" data-side="B" data-n="3">3</button></div>
       <div class="row" style="margin-top:6px"><span style="font-size:12px;opacity:.6;width:52px">ИИ у нас</span><button class="ai" data-n="0">0</button><button class="ai" data-n="1">1</button><button class="ai" data-n="2">2</button><button class="ai" data-n="3">3</button></div>
+      <div class="row" style="margin-top:6px"><span style="font-size:12px;opacity:.6;width:52px">Тактов</span><input id="ticksIn" type="number" min="1" max="20" step="1" style="flex:1;width:auto;background:#0d0f1e;border:1px solid #3a3f6a;color:#fff;border-radius:6px;padding:5px 6px;font-size:12px"><span style="font-size:11px;opacity:.5">сек/такт</span><input id="tickdurIn" type="number" min="0.1" max="1" step="0.05" style="flex:1;width:auto;background:#0d0f1e;border:1px solid #3a3f6a;color:#fff;border-radius:6px;padding:5px 6px;font-size:12px"></div>
       <button class="btn-ghost" id="restart" style="margin-top:8px">⟳ Новый бой</button>
     </div>
     <div class="box"><div class="lbl">Ход</div><div class="turn" id="turnInfo">—</div></div>
@@ -57,7 +58,7 @@
 <script>
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
   const CONE_HALF = 0.82, CONE_R = 150, TURN_RATE = 3.4, MOVE_COST = 0.18, TURN_COST = 10, COUNTER_COST = 12, BREATHER = 15, MOVE_BUDGET = 150;
-  const AMB_TURNCOST = 2, FLANK_MULT = 1.6, LUNGE = 12, RECOIL_K = 0.05, MOVE_EASE = 8, ROLL_EASE = 16, STANDOFF = 50, CIRCLE_RATE = 0.35, AMB_STEP = 1.5;
+  const AMB_TURNCOST = 2, FLANK_MULT = 1.6, LUNGE = 12, RECOIL_K = 0.05, MOVE_EASE = 8, ROLL_EASE = 16, STANDOFF = 50, STEP_MIN = 7, APPROACH_STEP = 34;
   const ABIL = {
     heavy:   { id:'heavy',   name:'Сильный удар',  cost:34, dmg:22, range:60, kind:'target', counterable:true, setPrio:true, flankable:true, knock:300, shake:13, frz:0.1,  beat:0.8,  turn:0.55, desc:'много урона, назначает цель приоритетной, дорого; сильно доворачивает' },
     quick:   { id:'quick',   name:'Быстрый удар',  cost:10, dmg:9,  range:60, kind:'target', noCounter:true, aggro:true, flankable:true, knock:150, shake:8,  frz:0.05, beat:0.45, turn:0.22, desc:'дёшево, без контратаки, тянет ярость цели на тебя' },
@@ -67,7 +68,7 @@
   };
   const ABILS = ['heavy','quick','aoe','recover','roll'];
 
-  let units, order, turnPtr, round, active, phase, queue, beat, slowmo, floaters, bursts, nA = 2, nB = 2, aiAllies = 0, now = 0, hover = null, pending = null, abilityUsed = false, freeze = 0, shake = 0;
+  let units, order, turnPtr, round, active, phase, queue, beat, slowmo, floaters, bursts, nA = 2, nB = 2, aiAllies = 0, TICKS = 6, TICK_DUR = 0.3, tickAcc = 0, now = 0, hover = null, pending = null, abilityUsed = false, freeze = 0, shake = 0;
 
   function makeUnits(cA, cB) {
     const list = [], nmA = ['Кай', 'Гарт', 'Лира'], clA = ['#5b8dff', '#4ec8f5', '#7c83ff'], nmB = ['Ворон', 'Ульф', 'Гром'], clB = ['#ff5c5c', '#ff8a4d', '#e0574d'];
@@ -112,18 +113,6 @@
       if (u.mt) { const k = Math.min(1, dt * (u.phaseT > 0 ? ROLL_EASE : MOVE_EASE)); u.x += (u.mt.x - u.x) * k; u.y += (u.mt.y - u.y) * k; if (Math.hypot(u.mt.x - u.x, u.mt.y - u.y) < 3) u.mt = null; }
       u.ox += (0 - u.ox) * Math.min(1, dt * 9); u.oy += (0 - u.oy) * Math.min(1, dt * 9);   // клинч возвращается к позиции
     }
-    if (phase !== 'choose' && phase !== 'over') {
-      for (const u of units) {
-        if (!u.alive || u === active || u.mt) continue;
-        const p = units.find(z => z.id === u.priorityId && z.alive);
-        if (!p || dist(u, p) > CONE_R + 30) continue;
-        if (u.att > 0) { faceToward(u, p.x, p.y, false); u.att = Math.max(0, u.att - AMB_TURNCOST * dt); }
-        // держим боевую дистанцию и медленно кружим вокруг цели (не липнем, не хоккей)
-        const ang = Math.atan2(u.y - p.y, u.x - p.x) + (u.id % 2 ? 1 : -1) * CIRCLE_RATE * dt;
-        u.x += (p.x + Math.cos(ang) * STANDOFF - u.x) * Math.min(1, dt * AMB_STEP);
-        u.y += (p.y + Math.sin(ang) * STANDOFF - u.y) * Math.min(1, dt * AMB_STEP);
-      }
-    }
     for (let it = 0; it < 3; it++) for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length; j++) { const a = units[i], b = units[j]; if (!a.alive || !b.alive || a.phaseT > 0 || b.phaseT > 0) continue; const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.R + b.R + 3; if (d > 0.001 && d < min) { const pp = (min - d) / 2, ux = dx / d, uy = dy / d; a.x -= ux * pp; a.y -= uy * pp; b.x += ux * pp; b.y += uy * pp; } else if (d <= 0.001) { a.x -= 1; b.x += 1; } }
     for (const u of units) { if (!u.alive) continue; u.x = Math.max(u.R, Math.min(cv.width - u.R, u.x)); u.y = Math.max(u.R, Math.min(cv.height - u.R, u.y)); }
   }
@@ -146,11 +135,13 @@
     enqueue(`${a.name}: ${ab.name}`, a.team === 'A' ? '#ffcf4d' : '#ff8a8a', t.x, t.y, () => {
       if (!a.alive || !t.alive) return;
       faceToward(a, t.x, t.y, false);
-      const flank = ab.flankable && !sees(t, a);
-      const dmg = applyDamage(t, ab.dmg * (flank ? FLANK_MULT : 1));
+      const dev = Math.abs(angDiff(t.face, angTo(t, a)));
+      const flank = ab.flankable && dev > CONE_HALF, back = flank && dev > 2.0;   // сзади = ваншот
+      const dmg = applyDamage(t, back ? 999 : ab.dmg * (flank ? FLANK_MULT : 1));
       clash(a, t, ab, flank);
       a.face += a.hand * ab.turn;   // занос от замаха: доворот в сторону рабочей руки
-      if (flank) floater(t.x, t.y - 44, 'с фланга!', '#ff5c5c', 15);
+      if (back) { floater(t.x, t.y - 46, 'В СПИНУ!', '#ff3b3b', 22); shake = Math.max(shake, 18); }
+      else if (flank) floater(t.x, t.y - 44, 'с фланга!', '#ff5c5c', 15);
       if (ab.setPrio) a.priorityId = t.id;
       if (ab.aggro) t.priorityId = a.id;
       if (!ab.noCounter && !isCounter && !flank && t.alive && sees(t, a) && t.att >= COUNTER_COST && dist(t, a) <= 58) {
@@ -184,34 +175,62 @@
     active = order[turnPtr];
     if (checkEnd()) return;
     active.att = Math.min(active.attMax, active.att + BREATHER); active.moveLeft = MOVE_BUDGET; active.mt = null;
-    const p = priorityOf(active); if (p) faceToward(active, p.x, p.y, true);
+    if (priorityOf(active)) faceTo(active, threatDir(active), true);
     abilityUsed = false; pending = null;
     if (active.team === 'A' && !active.ai) { phase = 'choose'; updateStatus(); setAbils(true); document.getElementById('end').disabled = false; }
-    else { phase = 'ai'; setAbils(false); document.getElementById('end').disabled = true; document.getElementById('turnInfo').innerHTML = `${active.name} <small>· раунд ${round}</small>`; setTimeout(aiTurn, 520); }
+    else { phase = 'ai'; active._tick = 0; active._acted = false; setAbils(false); document.getElementById('end').disabled = true; document.getElementById('turnInfo').innerHTML = `${active.name} <small>· раунд ${round} · тактов ${TICKS}</small>`; }
   }
   function advance() { do { turnPtr++; } while (turnPtr < order.length && (!order[turnPtr] || !order[turnPtr].alive)); if (turnPtr >= order.length) startRound(); else beginTurn(); }
   function endTurn() { if (phase === 'over') return; if (active) active.mt = null; active = null; phase = 'resolve'; setAbils(false); document.getElementById('end').disabled = true; }
   function updateStatus() { if (!active) return; document.getElementById('turnInfo').innerHTML = `${active.name} <small>· раунд ${round}</small>`; document.getElementById('hint').innerHTML = `<b>${active.name}</b>: внимательность <b>${Math.round(active.att)}</b>, запас хода <b>${Math.round(active.moveLeft)}</b>. Клик по земле — шаг, по врагу — фокус; способность → цель.`; }
 
-  function aiTurn() {
-    if (phase === 'over') return;
-    const u = active, p = priorityOf(u);
-    if (!p) { endTurn(); return; }
-    if (dist(u, p) > STANDOFF + 8) {   // подходим на боевую дистанцию, метя в бок
-      const behind = p.face + Math.PI + (Math.random() - .5) * 1.2, gx = p.x + Math.cos(behind) * STANDOFF, gy = p.y + Math.sin(behind) * STANDOFF;
-      const dx = gx - u.x, dy = gy - u.y, d = Math.hypot(dx, dy) || 1, step = Math.min(d, u.moveLeft, u.att > 12 ? u.att / MOVE_COST * 0.7 : d);
-      u.mt = { x: u.x + dx / d * step, y: u.y + dy / d * step }; u.moveLeft -= step; u.att = Math.max(0, u.att - step * MOVE_COST);
+  // Куда смотреть, чтобы держать всех врагов в конусе (взвешено по близости)
+  function threatDir(u) {
+    const foes = foesOf(u).filter(f => dist(u, f) < CONE_R + 60);
+    if (!foes.length) { const p = priorityOf(u); return p ? angTo(u, p) : u.face; }
+    let sx = 0, sy = 0; for (const f of foes) { const w = 1 / (dist(u, f) + 1); sx += Math.cos(angTo(u, f)) * w; sy += Math.sin(angTo(u, f)) * w; }
+    return Math.atan2(sy, sx);
+  }
+  // Ближний враг, оказавшийся за спиной (вне конуса) — от него надо срочно уходить
+  function rearThreat(u) { let worst = null, wd = CONE_HALF + 0.2; for (const f of foesOf(u)) { if (dist(u, f) < 82) { const dev = Math.abs(angDiff(u.face, angTo(u, f))); if (dev > wd) { wd = dev; worst = f; } } } return worst; }
+  function faceTo(u, ang, costs) { faceToward(u, u.x + Math.cos(ang) * 40, u.y + Math.sin(ang) * 40, costs); }
+  // Мини-реакция на такт: сперва не подставлять спину, затем — подшаг к/от/вбок
+  function microReact(u, isActive) {
+    const p = priorityOf(u); if (!p) return;
+    if (u.att > 0) faceTo(u, threatDir(u), true);            // разворот, чтобы все враги были спереди
+    const rear = rearThreat(u);
+    if (rear) { const away = angTo(rear, u); u.x += Math.cos(away) * STEP_MIN * 1.4; u.y += Math.sin(away) * STEP_MIN * 1.4; return; }   // спина открыта — уходим из-под захода
+    const d = dist(u, p);
+    if (isActive && d > STANDOFF + 14) {
+      const ang = angTo(u, p), s = Math.min(APPROACH_STEP, d - STANDOFF);
+      if (u.att > 0) { u.x += Math.cos(ang) * s; u.y += Math.sin(ang) * s; u.att = Math.max(0, u.att - s * MOVE_COST); }
+      return;
     }
-    setTimeout(() => {
-      if (phase === 'over') return;
-      const t = priorityOf(u); if (t) faceToward(u, t.x, t.y, true);
-      const inCone = foesOf(u).filter(f => dist(u, f) <= ABIL.aoe.range && Math.abs(angDiff(u.face, angTo(u, f))) <= 0.95);
-      const inRange = t && dist(u, t) <= ABIL.heavy.range + 6;
-      if (inCone.length >= 2 && u.att >= ABIL.aoe.cost) { u.att -= ABIL.aoe.cost; doAoe(u, ABIL.aoe); }
-      else if (inRange && u.att >= ABIL.quick.cost) { const flank = t && !sees(t, u); if (u.att >= ABIL.heavy.cost && (flank || t.hp <= 22)) { u.att -= ABIL.heavy.cost; doAttackEvent(u, t, ABIL.heavy, false); } else { u.att -= ABIL.quick.cost; doAttackEvent(u, t, ABIL.quick, false); } }
-      else if (u.att < ABIL.quick.cost + 4) { doRecover(u, ABIL.recover); }
-      setTimeout(endTurn, 320);
-    }, 760);
+    if (d > CONE_R + 30) return;
+    const ang = angTo(u, p); let dir;
+    if (d > STANDOFF + 7) dir = ang; else if (d < STANDOFF - 7) dir = ang + Math.PI; else dir = ang + u.hand * Math.PI / 2;
+    u.x += Math.cos(dir) * STEP_MIN; u.y += Math.sin(dir) * STEP_MIN;
+  }
+  function aiAct(u, t) {
+    const inCone = foesOf(u).filter(f => dist(u, f) <= ABIL.aoe.range && Math.abs(angDiff(u.face, angTo(u, f))) <= 0.95);
+    if (u.att < ABIL.quick.cost) { doRecover(u, ABIL.recover); return; }
+    if (inCone.length >= 2 && u.att >= ABIL.aoe.cost) { u.att -= ABIL.aoe.cost; doAoe(u, ABIL.aoe); return; }
+    const flank = t && !sees(t, u);
+    if (u.att >= ABIL.heavy.cost && (flank || t.hp <= 22)) { u.att -= ABIL.heavy.cost; doAttackEvent(u, t, ABIL.heavy, false); }
+    else { u.att -= ABIL.quick.cost; doAttackEvent(u, t, ABIL.quick, false); }
+  }
+  // Один такт: каждому актору — мини-реакция; активный ИИ действует к середине хода
+  function doTick() {
+    for (const u of units) { if (!u.alive) continue; if (u === active && phase === 'choose') continue; microReact(u, u === active && phase === 'ai'); }
+    if (phase === 'ai' && active) {
+      const t = priorityOf(active);
+      if (!active._acted && active._tick >= Math.floor(TICKS / 2)) {
+        if (t && dist(active, t) <= ABIL.heavy.range + 6) { aiAct(active, t); active._acted = true; }
+        else if (active.att < ABIL.quick.cost) { doRecover(active, ABIL.recover); active._acted = true; }
+      }
+      active._tick++;
+      if (active._tick > TICKS) endTurn();
+    }
   }
 
   // ---- Ввод ----
@@ -231,6 +250,7 @@
   function setAiButtons() { document.querySelectorAll('.ai').forEach(b => { b.classList.toggle('sel', aiAllies === +b.dataset.n); b.disabled = +b.dataset.n > nA; }); }
   document.querySelectorAll('.cnt').forEach(b => b.onclick = () => { if (b.dataset.side === 'A') nA = +b.dataset.n; else nB = +b.dataset.n; if (aiAllies > nA) aiAllies = nA; setCounts(); setAiButtons(); initBattle(); });
   document.querySelectorAll('.ai').forEach(b => b.onclick = () => { const n = +b.dataset.n; if (n > nA) return; aiAllies = n; setAiButtons(); initBattle(); });
+  { const ti = document.getElementById('ticksIn'), td = document.getElementById('tickdurIn'); ti.value = TICKS; td.value = TICK_DUR; ti.oninput = () => { const v = parseInt(ti.value); if (v >= 1) TICKS = v; }; td.oninput = () => { const v = parseFloat(td.value); if (v > 0.05) TICK_DUR = v; }; }
   cv.addEventListener('mousemove', e => { const r = cv.getBoundingClientRect(); hover = { x: e.clientX - r.left, y: e.clientY - r.top }; });
   cv.addEventListener('mouseleave', () => hover = null);
   cv.addEventListener('click', e => {
@@ -293,6 +313,7 @@
     const dt = dtReal * slowmo;
     pumpBeats(dt);
     if (phase === 'resolve' && !busy()) { phase = 'between'; advance(); }
+    if (phase !== 'over' && !busy()) { tickAcc += dtReal; if (tickAcc >= TICK_DUR) { tickAcc = 0; doTick(); } }
     groundStep(dt);
     if (!busy()) for (const u of units) coneScan(u);
     for (const u of units) {
@@ -310,7 +331,7 @@
   }
 
   function initBattle() {
-    units = makeUnits(nA, nB); round = 0; active = null; phase = 'init'; queue = []; beat = null; slowmo = 1; floaters = []; bursts = []; pending = null; abilityUsed = false; freeze = 0; shake = 0;
+    units = makeUnits(nA, nB); round = 0; active = null; phase = 'init'; queue = []; beat = null; slowmo = 1; floaters = []; bursts = []; pending = null; abilityUsed = false; freeze = 0; shake = 0; tickAcc = 0;
     const A = units.filter(u => u.team === 'A'), B = units.filter(u => u.team === 'B');
     A.forEach((u, i) => u.priorityId = B[i % B.length].id); B.forEach((u, i) => u.priorityId = A[i % A.length].id);
     document.getElementById('banner').style.display = 'none'; document.getElementById('log').innerHTML = '';
