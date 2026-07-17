@@ -350,8 +350,11 @@
   function archerSpot(u, p) {
     const n = nearestFoe(u);
     if (n && dist(u, n) < MELEE_PANIC) { const away = angTo(n, u); return { x: clampX(n.x + Math.cos(away) * KITE), y: clampY(n.y + Math.sin(away) * KITE) }; }
+    // За союзником — но так, чтобы до цели осталось не меньше KITE. Иначе, когда щит сцепился вплотную,
+    // стрелок покорно шёл за ним прямо в мясорубку.
     const scr = screenFor(u, p);
-    if (scr) { const a = angTo(p, scr); return { x: clampX(scr.x + Math.cos(a) * 88), y: clampY(scr.y + Math.sin(a) * 88) }; }
+    if (scr) { const a = angTo(p, scr), back = Math.max(88, KITE - dist(p, scr));
+      return { x: clampX(scr.x + Math.cos(a) * back), y: clampY(scr.y + Math.sin(a) * back) }; }
     const away = angTo(p, u); return { x: clampX(p.x + Math.cos(away) * KITE), y: clampY(p.y + Math.sin(away) * KITE) };
   }
   // Плавная непрерывная «работа ног»: держим дистанцию, кружим, не подставляем спину
@@ -376,15 +379,23 @@
     const g = steerAround(u, clampX(tx), clampY(ty));   // обтекаем валун, а не втыкаемся в него
     u.x += (clampX(g.x) - u.x) * Math.min(1, dt * acc); u.y += (clampY(g.y) - u.y) * Math.min(1, dt * acc);
   }
-  // Умный выбирает цель осмысленно: кто нас не видит, кто ранен, кто стрелок, кто ближе
+  // Выбор цели — для ВСЕХ каждый ход, а не только для умных. Ключевое: бьём того, кого уже бьют свои,
+  // иначе бой рассыпается на изолированные дуэли-кучки.
   function bestTargetFor(u) {
     const foes = foesOf(u); if (!foes.length) return null;
     let best = null, bs = -1e9;
     for (const f of foes) {
       let s = -dist(u, f) * 0.06;
-      if (Math.abs(angDiff(f.face, angTo(f, u))) > coneHalf(f)) s += 34;   // он нас не видит — заходим во фланг
-      s += (f.max - f.hp) * 0.7;                                            // добиваем раненого
-      if (f.type === 'archer') s += 20;                                     // стрелок опаснее — вырезаем первым
+      if (sees(u, f)) s += 14;                                              // кого вижу — того и бью
+      const focus = units.filter(a => a.alive && a.team === u.team && a !== u && a.priorityId === f.id).length;
+      s += Math.min(focus, 2) * 16;                                         // сходимся на общей цели — строй, а не дуэли
+      if (u.trait === 'smart') {                                            // умный видит на слой глубже
+        if (Math.abs(angDiff(f.face, angTo(f, u))) > coneHalf(f)) s += 34;  // он нас не видит — заходим во фланг
+        s += (f.max - f.hp) * 0.7;                                          // добиваем раненого
+        if (f.type === 'archer') s += 20;                                   // стрелок опаснее — вырезаем первым
+      } else {
+        s += (f.max - f.hp) * 0.25;                                         // раненого добить хочет любой, но слабее
+      }
       if (s > bs) { bs = s; best = f; }
     }
     return best;
@@ -420,7 +431,7 @@
     setTimeout(() => {
       if (phase === 'over') return;
       faceTo(u, threatDir(u), true);
-      if (u.trait === 'smart') { const b = bestTargetFor(u); if (b && b.id !== u.priorityId) { u.priorityId = b.id; floater(u.x, u.y - 32, '⇢ ' + b.base, '#c9a2ff', 13); } }
+      { const b = bestTargetFor(u); if (b && b.id !== u.priorityId) { u.priorityId = b.id; floater(u.x, u.y - 32, '⇢ ' + b.base, u.trait === 'smart' ? '#c9a2ff' : '#ffcf4d', 13); } }
       const t = priorityOf(u);
       if (!t) doRecover(u, ABIL.recover);
       else if (u.att < costOf(u, ABIL.quick)) doRecover(u, ABIL.recover);
@@ -584,7 +595,8 @@
     resolveObstacles();   // никто не рождается внутри камня
     round = 0; active = null; phase = 'init'; queue = []; beat = null; slowmo = 1; floaters = []; bursts = []; arrows = []; pending = null; abilityUsed = false; freeze = 0; shake = 0;
     const A = units.filter(u => u.team === 'A'), B = units.filter(u => u.team === 'B');
-    A.forEach((u, i) => u.priorityId = B[i % B.length].id); B.forEach((u, i) => u.priorityId = A[i % A.length].id);
+    // Никаких пар «наш №1 против их №1» — это и рассыпало бой на изолированные дуэли. Цель выбирается сама.
+    units.forEach(u => u.priorityId = null);
     document.getElementById('banner').style.display = 'none'; document.getElementById('log').innerHTML = '';
     log('Секторный бой: приземлённый ближний бой, фланги, очередь событий.', '#ffcf4d');
     startRound();
