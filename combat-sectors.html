@@ -59,6 +59,7 @@
   const CONE_MIN = 0.16, CONE_MAX = 1.08, CONE_R = 190, CONE_R_MIN = 0.42, TURN_RATE = 3.4, MOVE_COST = 0.10, TURN_COST = 10, COUNTER_COST = 12, BREATHER = 42, MOVE_BUDGET = 300;
   const BACK_COST = 2.6;   // движение спиной вперёд — во столько раз дороже (вбок — промежуточно)
   const TRACK_RATE = 1.5;  // пассивное слежение за целью: бесплатно, но медленно (рад/сек)
+  const ALLY_SPACE = 30;   // личная дистанция между своими: в клинч вонзаемся только с врагами
   const AMB_TURNCOST = 2, FLANK_MULT = 1.6, LUNGE = 12, RECOIL_K = 0.05, MOVE_EASE = 8, ROLL_EASE = 16, STANDOFF = 50, FOOT_ACCEL = 2.6, CIRCLE_RATE = 0.4;
   const KITE = 185, MELEE_PANIC = 120;   // стрелок держит дистанцию; ближе MELEE_PANIC — рвёт её
   // ---- Геометрия поля: валуны, которые нельзя пройти и сквозь которые не видно ----
@@ -84,10 +85,10 @@
     return false;
   }
   const clearLine = (a, b) => !segHitsObstacle(a.x, a.y, b.x, b.y);
-  // Первый валун на пути отрезка — именно его надо обходить
-  function firstBlocking(ax, ay, bx, by, pad) {
+  // Первое препятствие на пути отрезка — именно его надо обходить
+  function firstBlockingIn(list, ax, ay, bx, by, pad) {
     let best = null, bd = 1e9;
-    for (const o of OBST) {
+    for (const o of list) {
       const dx = bx - ax, dy = by - ay, a = dx * dx + dy * dy; if (a < 1e-6) continue;
       let t = -((ax - o.x) * dx + (ay - o.y) * dy) / a; t = Math.max(0, Math.min(1, t));
       const cx = ax + dx * t - o.x, cy = ay + dy * t - o.y, rr = o.r + pad;
@@ -95,9 +96,21 @@
     }
     return best;
   }
-  // Не упираться в камень, а обтекать его: если цель за валуном — идём по касательной с той стороны, где цель
+  const firstBlocking = (ax, ay, bx, by, pad) => firstBlockingIn(OBST, ax, ay, bx, by, pad);
+  // Обходим и камни, и своих. Врагов — не обходим: с ними как раз и надо сходиться вплотную.
+  // Союзник у самой цели не считается помехой, иначе стрелок не смог бы встать вплотную за щит.
+  function blockersFor(u, tx, ty) {
+    const list = OBST.slice();
+    for (const m of units) {
+      if (!m.alive || m === u || m.team !== u.team) continue;
+      if (Math.hypot(m.x - tx, m.y - ty) < m.R + ALLY_SPACE) continue;   // он стоит там, куда мы идём — не помеха, разойдёмся вплотную
+      list.push({ x: m.x, y: m.y, r: m.R + ALLY_SPACE * 0.5 });
+    }
+    return list;
+  }
+  // Не упираться, а обтекать: если цель за препятствием — идём по касательной с той стороны, где цель
   function steerAround(u, tx, ty) {
-    const o = firstBlocking(u.x, u.y, tx, ty, u.R + 6);
+    const o = firstBlockingIn(blockersFor(u, tx, ty), u.x, u.y, tx, ty, u.R + 6);
     if (!o) return { x: tx, y: ty };
     const d = Math.hypot(o.x - u.x, o.y - u.y), need = o.r + u.R + 12;
     const toO = Math.atan2(o.y - u.y, o.x - u.x), toT = Math.atan2(ty - u.y, tx - u.x);
@@ -226,7 +239,7 @@
         u.x += (g.x - u.x) * k; u.y += (g.y - u.y) * k; if (Math.hypot(u.mt.x - u.x, u.mt.y - u.y) < 3) u.mt = null; }
       u.ox += (0 - u.ox) * Math.min(1, dt * 9); u.oy += (0 - u.oy) * Math.min(1, dt * 9);   // клинч возвращается к позиции
     }
-    for (let it = 0; it < 3; it++) for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length; j++) { const a = units[i], b = units[j]; if (!a.alive || !b.alive || a.phaseT > 0 || b.phaseT > 0) continue; const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.R + b.R + 3; if (d > 0.001 && d < min) { const pp = (min - d) / 2, ux = dx / d, uy = dy / d; a.x -= ux * pp; a.y -= uy * pp; b.x += ux * pp; b.y += uy * pp; } else if (d <= 0.001) { a.x -= 1; b.x += 1; } }
+    for (let it = 0; it < 3; it++) for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length; j++) { const a = units[i], b = units[j]; if (!a.alive || !b.alive || a.phaseT > 0 || b.phaseT > 0) continue; const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.R + b.R + (a.team === b.team ? ALLY_SPACE : 3); if (d > 0.001 && d < min) { const pp = (min - d) / 2, ux = dx / d, uy = dy / d; a.x -= ux * pp; a.y -= uy * pp; b.x += ux * pp; b.y += uy * pp; } else if (d <= 0.001) { a.x -= 1; b.x += 1; } }
     for (const u of units) { if (!u.alive) continue; u.x = Math.max(u.R, Math.min(cv.width - u.R, u.x)); u.y = Math.max(u.R, Math.min(cv.height - u.R, u.y)); }
   }
 
