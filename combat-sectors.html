@@ -121,9 +121,13 @@
   }
   // Трейты: свои действия даются дешевле; умный — шире конус и больше запас внимания
   const TRAITS = {
-    strong: { key:'strong', label:'Сильный', labelF:'Сильная', mark:'С', col:'#ff9f6b', cheap:['heavy','aoe'],         mult:0.55 },
-    agile:  { key:'agile',  label:'Ловкий',  labelF:'Ловкая',  mark:'Л', col:'#8fe3ff', cheap:['quick','roll','shot'], mult:0.55, moveMult:0.32, footMult:2.2, counterMult:0.45 },
-    smart:  { key:'smart',  label:'Умный',   labelF:'Умная',   mark:'У', col:'#c9a2ff', cheap:[],                      mult:1, coneBonus:0.26, attBonus:45 },
+    // Каждый трейт — свой рисунок боя: сильный прёт и давит, ловкий танцует, умный ищет обход
+    strong: { key:'strong', label:'Сильный', labelF:'Сильная', mark:'С', col:'#ff9f6b', cheap:['heavy','aoe'], mult:0.55,
+              standoff:38, circle:0.12, dmgMult:1.4, footMult:0.7, style:'давит' },
+    agile:  { key:'agile',  label:'Ловкий',  labelF:'Ловкая',  mark:'Л', col:'#8fe3ff', cheap:['quick','roll','shot'], mult:0.55,
+              moveMult:0.32, footMult:2.4, counterMult:0.45, standoff:66, circle:2.4, dmgMult:0.8, style:'танцует' },
+    smart:  { key:'smart',  label:'Умный',   labelF:'Умная',   mark:'У', col:'#c9a2ff', cheap:[], mult:1,
+              coneBonus:0.26, attBonus:45, standoff:54, circle:1.3, dmgMult:1, footMult:1.2, style:'обходит' },
   };
   const TKEYS = ['strong','agile','smart'];
   function costOf(u, ab) { if (!ab.cost) return 0; const t = TRAITS[u.trait]; return Math.round(ab.cost * (t && t.cheap.includes(ab.id) ? t.mult : 1)); }
@@ -246,7 +250,7 @@
       faceToward(a, t.x, t.y, false);
       const dev = Math.abs(angDiff(t.face, angTo(t, a)));
       const flank = ab.flankable && dev > coneHalf(t), back = flank && dev > 2.0;   // сзади = ваншот; чем меньше у цели внимания, тем уже её конус — и тем легче её обойти
-      const dmg = applyDamage(t, back ? 999 : ab.dmg * (flank ? FLANK_MULT : 1));
+      const dmg = applyDamage(t, back ? 999 : ab.dmg * (flank ? FLANK_MULT : 1) * (TRAITS[a.trait].dmgMult || 1));
       clash(a, t, ab, flank);
       a.face += a.hand * ab.turn;   // занос от замаха: доворот в сторону рабочей руки
       if (back) { floater(t.x, t.y - 46, 'В СПИНУ!', '#ff3b3b', 22); shake = Math.max(shake, 18); }
@@ -264,7 +268,7 @@
     enqueue(`${a.name}: ${ab.name}`, '#ffcf4d', a.x, a.y, () => {
       if (!a.alive) return; a.att -= costOf(a, ab);
       const hit = foesOf(a).filter(t => dist(a, t) <= ab.range && Math.abs(angDiff(a.face, angTo(a, t))) <= coneHalf(a));
-      hit.forEach(t => { applyDamage(t, ab.dmg); clash(a, t, ab, false); });
+      hit.forEach(t => { applyDamage(t, ab.dmg * (TRAITS[a.trait].dmgMult || 1)); clash(a, t, ab, false); });
       a.face += a.hand * ab.turn;
       floater(a.x, a.y, `АоЕ ×${hit.length}`, '#ffcf4d', 16); shake = Math.max(shake, ab.shake);
     }, ab.ticks * TICK_DUR, ab.frz);
@@ -370,10 +374,12 @@
       if (rear) { const away = angTo(rear, u); tx = u.x + Math.cos(away) * 34; ty = u.y + Math.sin(away) * 34; }   // уходим из-под захода в спину
       else {
         const cur = Math.atan2(u.y - p.y, u.x - p.x);
-        // Умный кружит осмысленно — заходит цели в слепую зону; остальные просто кружат в сторону рабочей руки
-        const dir = u.trait === 'smart' ? (Math.sign(angDiff(cur, p.face + Math.PI)) || 1) * 1.5 : u.hand;
-        const a = cur + dir * CIRCLE_RATE * dt;
-        tx = p.x + Math.cos(a) * STANDOFF; ty = p.y + Math.sin(a) * STANDOFF;
+        // Умный кружит осмысленно — заходит цели в слепую зону; остальные кружат в сторону рабочей руки.
+        // Темп кружения и боевая дистанция — свои у каждого трейта: сильный вжимается и почти не танцует, ловкий вьётся.
+        const dir = u.trait === 'smart' ? (Math.sign(angDiff(cur, p.face + Math.PI)) || 1) : u.hand;
+        const a = cur + dir * CIRCLE_RATE * (tr.circle || 1) * dt;
+        const want = tr.standoff || STANDOFF;
+        tx = p.x + Math.cos(a) * want; ty = p.y + Math.sin(a) * want;
       }
     }
     const g = steerAround(u, clampX(tx), clampY(ty));   // обтекаем валун, а не втыкаемся в него
@@ -420,7 +426,9 @@
     const inCone = foesOf(u).filter(f => dist(u, f) <= ABIL.aoe.range && Math.abs(angDiff(u.face, angTo(u, f))) <= coneHalf(u));
     if (inCone.length >= 2 && u.att >= costOf(u, ABIL.aoe)) { doAoe(u, ABIL.aoe); return; }   // цену снимает сам doAoe
     const flank = t && !sees(t, u);
-    if (u.att >= costOf(u, ABIL.heavy) && (flank || t.hp <= 22)) { u.att -= costOf(u, ABIL.heavy); doAttackEvent(u, t, ABIL.heavy, false); }
+    // Сильный лупит тяжёлым при любой возможности, ловкий вообще его не любит — сыплет быстрыми, умный ждёт открытия
+    const wantHeavy = u.trait === 'strong' ? true : (flank || t.hp <= 22);
+    if (u.trait !== 'agile' && u.att >= costOf(u, ABIL.heavy) && wantHeavy) { u.att -= costOf(u, ABIL.heavy); doAttackEvent(u, t, ABIL.heavy, false); }
     else { u.att -= costOf(u, ABIL.quick); doAttackEvent(u, t, ABIL.quick, false); }
   }
   // Ход ИИ: РОВНО одно полноценное действие — удар вблизи, решительное сближение вдали, иначе перевести дух
@@ -437,10 +445,9 @@
       else if (u.att < costOf(u, ABIL.quick)) doRecover(u, ABIL.recover);
       else if (u.type === 'archer') {
         const near = nearestFoe(u), dn = near ? dist(u, near) : 1e9;
-        const s = archerSpot(u, t), offSpot = Math.hypot(s.x - u.x, s.y - u.y);
         if (dn < MELEE_PANIC) doRetreat(u, near);      // кто угодно подобрался вплотную — рвём дистанцию от НЕГО
-        else if (canShoot(u, t) && offSpot < 70) aiAct(u, t);   // стоим за щитом и видим цель — стреляем
-        else doTakePosition(u, t);                     // иначе — уходим за союзника
+        else if (canShoot(u, t)) aiAct(u, t);          // видит цель — стреляет откуда стоит; к удобной позиции его тянут ноги
+        else doTakePosition(u, t);                     // не видит (камень или конус) — идёт занимать позицию
       }
       else if (dist(u, t) <= ABIL.heavy.range + 8) aiAct(u, t);
       else doAdvance(u, t);
@@ -450,7 +457,7 @@
   }
   // Полноценное сближение: решительный шаг в бой со своей ценой в тиках; пока он идёт — остальные реагируют
   function doAdvance(u, p) {
-    const want = u.type === 'archer' ? KITE : STANDOFF, gap = dist(u, p) - want;
+    const want = u.type === 'archer' ? KITE : (TRAITS[u.trait].standoff || STANDOFF), gap = dist(u, p) - want;
     if (gap <= 6) { doRecover(u, ABIL.recover); return; }   // уже на нужной дистанции — не топчется, а восстанавливает обзор
     const ang = angTo(u, p), stride = Math.min(190, Math.max(20, gap));
     const gx = u.x + Math.cos(ang) * stride, gy = u.y + Math.sin(ang) * stride;
