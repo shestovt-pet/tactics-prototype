@@ -35,7 +35,7 @@
 
 <h1>СЕКТОРНЫЙ БОЙ <small>· приземлённый ближний бой · внимание · очередь событий</small></h1>
 <div class="wrap">
-  <canvas id="c" width="760" height="500"></canvas>
+  <canvas id="c" width="1040" height="660"></canvas>
   <div class="side">
     <div class="box">
       <div class="lbl">Состав</div>
@@ -59,6 +59,41 @@
   const CONE_MIN = 0.30, CONE_MAX = 0.95, CONE_R = 150, TURN_RATE = 3.4, MOVE_COST = 0.18, TURN_COST = 10, COUNTER_COST = 12, BREATHER = 15, MOVE_BUDGET = 150;
   const AMB_TURNCOST = 2, FLANK_MULT = 1.6, LUNGE = 12, RECOIL_K = 0.05, MOVE_EASE = 8, ROLL_EASE = 16, STANDOFF = 50, FOOT_ACCEL = 2.6, CIRCLE_RATE = 0.4;
   const KITE = 185, MELEE_PANIC = 120;   // стрелок держит дистанцию; ближе MELEE_PANIC — рвёт её
+  // ---- Геометрия поля: валуны, которые нельзя пройти и сквозь которые не видно ----
+  let OBST = [];
+  function makeObstacles() {
+    const W = cv.width, H = cv.height;
+    return [
+      { x: W * 0.50, y: H * 0.22, r: 52 }, { x: W * 0.50, y: H * 0.78, r: 52 },
+      { x: W * 0.50, y: H * 0.50, r: 34 },
+      { x: W * 0.30, y: H * 0.42, r: 40 }, { x: W * 0.30, y: H * 0.72, r: 30 },
+      { x: W * 0.70, y: H * 0.42, r: 40 }, { x: W * 0.70, y: H * 0.72, r: 30 },
+    ];
+  }
+  // Пересекает ли отрезок валун — этим рвётся линия взгляда и выстрела
+  function segHitsObstacle(ax, ay, bx, by) {
+    for (const o of OBST) {
+      const dx = bx - ax, dy = by - ay, a = dx * dx + dy * dy;
+      if (a < 1e-6) continue;
+      let t = -((ax - o.x) * dx + (ay - o.y) * dy) / a; t = Math.max(0, Math.min(1, t));
+      const cx = ax + dx * t - o.x, cy = ay + dy * t - o.y;
+      if (cx * cx + cy * cy < o.r * o.r) return true;
+    }
+    return false;
+  }
+  const clearLine = (a, b) => !segHitsObstacle(a.x, a.y, b.x, b.y);
+  // Никто не стоит внутри камня: выталкиваем наружу по нормали — так бойцы естественно обтекают геометрию
+  function resolveObstacles() {
+    for (const u of units) {
+      if (!u.alive) continue;
+      for (const o of OBST) {
+        let dx = u.x - o.x, dy = u.y - o.y, d = Math.hypot(dx, dy);
+        const need = o.r + u.R;
+        if (d < 0.001) { dx = 1; dy = 0; d = 1; }   // ровно в центре камня — направление вырождается, толкаем в любую сторону
+        if (d < need) { u.x = o.x + dx / d * need; u.y = o.y + dy / d * need; }
+      }
+    }
+  }
   // Трейты: свои действия даются дешевле; умный — шире конус и больше запас внимания
   const TRAITS = {
     strong: { key:'strong', label:'Сильный', labelF:'Сильная', mark:'С', col:'#ff9f6b', cheap:['heavy','aoe'],         mult:0.55 },
@@ -100,9 +135,9 @@
     // Шахматный строй: два столбца, чётные/нечётные ряды сдвинуты вглубь — никто не стоит вплотную и не заслоняет соседа.
     const place = (i, c, isArcher, side) => {
       const cols = 2, rows = Math.ceil(c / cols), row = Math.floor(i / cols), col = i % cols;
-      const gapY = Math.min(94, 440 / Math.max(1, rows));
-      const depth = col * 66 + (row % 2) * 33 + (isArcher ? 96 : 0);   // стрелок заметно глубже в тылу
-      return { x: side === 'A' ? 150 + depth : 610 - depth, y: 250 + (row - (rows - 1) / 2) * gapY };
+      const gapY = Math.min(104, (cv.height - 90) / Math.max(1, rows));
+      const depth = col * 70 + (row % 2) * 35 + (isArcher ? 104 : 0);   // стрелок заметно глубже в тылу
+      return { x: side === 'A' ? 74 + depth : cv.width - 74 - depth, y: cv.height / 2 + (row - (rows - 1) / 2) * gapY };
     };
     const FEM = new Set(['Лира', 'Эйла', 'Мира', 'Сольв', 'Хель']);
     const mk = (i, c, side, arch, nm, init0) => {
@@ -122,9 +157,9 @@
   const foesOf = u => units.filter(x => x.alive && x.team !== u.team);
   function angTo(a, b) { return Math.atan2(b.y - a.y, b.x - a.x); }
   function angDiff(a, b) { return Math.atan2(Math.sin(b - a), Math.cos(b - a)); }
-  function sees(a, t) { return dist(a, t) <= CONE_R && Math.abs(angDiff(a.face, angTo(a, t))) <= coneHalf(a); }
-  // Видит ли стрелок цель для выстрела: дальше, но всё так же строго внутри своего конуса
-  function canShoot(a, t) { return dist(a, t) <= ABIL.shot.range && Math.abs(angDiff(a.face, angTo(a, t))) <= coneHalf(a); }
+  function sees(a, t) { return dist(a, t) <= CONE_R && Math.abs(angDiff(a.face, angTo(a, t))) <= coneHalf(a) && clearLine(a, t); }
+  // Видит ли стрелок цель для выстрела: дальше, но всё так же строго внутри конуса — и без камня на линии
+  function canShoot(a, t) { return dist(a, t) <= ABIL.shot.range && Math.abs(angDiff(a.face, angTo(a, t))) <= coneHalf(a) && clearLine(a, t); }
   function nearestFoe(u) { return foesOf(u).reduce((p, c) => (!p || dist(u, c) < dist(u, p)) ? c : p, null); }
   function priorityOf(u) { let t = units.find(x => x.id === u.priorityId && x.alive && x.team !== u.team); if (!t) { t = nearestFoe(u); u.priorityId = t ? t.id : null; } return t; }
   function coneScan(u) {
@@ -452,6 +487,13 @@
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.save();
     if (shake > 0.2) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
+    for (const o of OBST) {   // валуны: сквозь них не пройти и не увидеть
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+      ctx.fillStyle = '#191d31'; ctx.fill();
+      ctx.strokeStyle = '#39406a'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(o.x - o.r * 0.22, o.y - o.r * 0.22, o.r * 0.52, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(120,132,190,.07)'; ctx.fill();
+    }
     for (const u of units) { if (!u.alive) continue; const p = units.find(z => z.id === u.priorityId && z.alive); if (p) { ctx.beginPath(); ctx.moveTo(u.rx, u.ry); ctx.lineTo(p.rx, p.ry); ctx.strokeStyle = 'rgba(255,207,77,.09)'; ctx.lineWidth = 1; ctx.stroke(); } }
     if (active && active.alive) { const p = units.find(z => z.id === active.priorityId && z.alive); if (p) { ctx.beginPath(); ctx.moveTo(active.rx, active.ry); ctx.lineTo(p.rx, p.ry); ctx.strokeStyle = 'rgba(255,207,77,.35)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.beginPath(); ctx.arc(p.rx, p.ry, 22, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,207,77,.6)'; ctx.lineWidth = 1.5; ctx.stroke(); } }
     if (phase === 'choose' && active && !pending && active.moveLeft > 1) { ctx.beginPath(); ctx.arc(active.rx, active.ry, active.moveLeft, 0, Math.PI * 2); ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(124,131,255,.35)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]); }
@@ -479,6 +521,7 @@
     if (phase === 'resolve' && !busy()) { phase = 'between'; advance(); }
     if (phase !== 'over' && !(phase === 'choose' && !busy())) { for (const u of units) if (u.alive && u !== active) footwork(u, dt); }
     groundStep(dt);
+    resolveObstacles();
     if (!busy()) for (const u of units) coneScan(u);
     for (const u of units) {
       let fwx = 0, fwy = 0;
@@ -497,7 +540,10 @@
 
   function initBattle() {
     syncCfg();
-    units = makeUnits(nA, nB); round = 0; active = null; phase = 'init'; queue = []; beat = null; slowmo = 1; floaters = []; bursts = []; arrows = []; pending = null; abilityUsed = false; freeze = 0; shake = 0;
+    OBST = makeObstacles();
+    units = makeUnits(nA, nB);
+    resolveObstacles();   // никто не рождается внутри камня
+    round = 0; active = null; phase = 'init'; queue = []; beat = null; slowmo = 1; floaters = []; bursts = []; arrows = []; pending = null; abilityUsed = false; freeze = 0; shake = 0;
     const A = units.filter(u => u.team === 'A'), B = units.filter(u => u.team === 'B');
     A.forEach((u, i) => u.priorityId = B[i % B.length].id); B.forEach((u, i) => u.priorityId = A[i % A.length].id);
     document.getElementById('banner').style.display = 'none'; document.getElementById('log').innerHTML = '';
