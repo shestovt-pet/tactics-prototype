@@ -358,21 +358,34 @@
   }
   const clampX = x => Math.max(18, Math.min(cv.width - 18, x)), clampY = y => Math.max(18, Math.min(cv.height - 18, y));
   // Союзник-щит: тот, кто лучше всех перекрывает стрелку линию до цели
+  function screenScore(u, p, m) {
+    const off = Math.abs(angDiff(angTo(p, u), angTo(p, m)));          // насколько союзник близок к линии «цель→стрелок»
+    return -off * 90 - Math.abs(dist(p, m) - STANDOFF) * 0.25 - dist(u, m) * 0.06;
+  }
   function screenFor(u, p) {
     const mates = units.filter(a => a.alive && a.team === u.team && a !== u && a.type !== 'archer');
-    if (!mates.length) return null;
+    if (!mates.length) { u._screenId = null; return null; }
     let best = null, bs = -1e9;
-    for (const m of mates) {
-      const off = Math.abs(angDiff(angTo(p, u), angTo(p, m)));        // насколько союзник близок к линии «цель→стрелок»
-      const s = -off * 90 - Math.abs(dist(p, m) - STANDOFF) * 0.25 - dist(u, m) * 0.06;
-      if (s > bs) { bs = s; best = m; }
-    }
+    for (const m of mates) { const s = screenScore(u, p, m); if (s > bs) { bs = s; best = m; } }
+    // Держимся выбранного щита, пока новый не станет ЗАМЕТНО лучше. Иначе при двух примерно равных союзниках
+    // выбор мечется каждый кадр, спот прыгает через полполя — и стрелка колотит.
+    const cur = mates.find(m => m.id === u._screenId);
+    if (cur && best !== cur && bs < screenScore(u, p, cur) + 34) return cur;
+    u._screenId = best ? best.id : null;
     return best;
   }
   // Куда встать стрелку: ровно ЗА союзником-щитом по линии от цели. Нет щита — просто на дистанции от ближайшего.
+  // Убегаем, пока не отойдём заметно дальше порога паники — иначе на самой границе стрелок дёргается
+  // между «бежать» и «встать за щита», а это два совсем разных места.
+  function archerFleeing(u) {
+    const n = nearestFoe(u); if (!n) { u._fleeing = false; return null; }
+    const th = u._fleeing ? MELEE_PANIC + 45 : MELEE_PANIC;
+    if (dist(u, n) < th) { u._fleeing = true; return n; }
+    u._fleeing = false; return null;
+  }
   function archerSpot(u, p) {
-    const n = nearestFoe(u);
-    if (n && dist(u, n) < MELEE_PANIC) { const away = angTo(n, u); return { x: clampX(n.x + Math.cos(away) * KITE), y: clampY(n.y + Math.sin(away) * KITE) }; }
+    const n = archerFleeing(u);
+    if (n) { const away = angTo(n, u); return { x: clampX(n.x + Math.cos(away) * KITE), y: clampY(n.y + Math.sin(away) * KITE) }; }
     // За союзником — но так, чтобы до цели осталось не меньше KITE. Иначе, когда щит сцепился вплотную,
     // стрелок покорно шёл за ним прямо в мясорубку.
     const scr = screenFor(u, p);
@@ -408,23 +421,28 @@
   }
   // Выбор цели — для ВСЕХ каждый ход, а не только для умных. Ключевое: бьём того, кого уже бьют свои,
   // иначе бой рассыпается на изолированные дуэли-кучки.
+  function targetScore(u, f) {
+    let s = -dist(u, f) * 0.06;
+    if (sees(u, f)) s += 14;                                              // кого вижу — того и бью
+    const focus = units.filter(a => a.alive && a.team === u.team && a !== u && a.priorityId === f.id).length;
+    s += Math.min(focus, 2) * 16;                                         // сходимся на общей цели — строй, а не дуэли
+    if (u.trait === 'smart') {                                            // умный видит на слой глубже
+      if (Math.abs(angDiff(f.face, angTo(f, u))) > coneHalf(f)) s += 34;  // он нас не видит — заходим во фланг
+      s += (f.max - f.hp) * 0.7;                                          // добиваем раненого
+      if (f.type === 'archer') s += 20;                                   // стрелок опаснее — вырезаем первым
+    } else {
+      s += (f.max - f.hp) * 0.25;                                         // раненого добить хочет любой, но слабее
+    }
+    return s;
+  }
   function bestTargetFor(u) {
     const foes = foesOf(u); if (!foes.length) return null;
     let best = null, bs = -1e9;
-    for (const f of foes) {
-      let s = -dist(u, f) * 0.06;
-      if (sees(u, f)) s += 14;                                              // кого вижу — того и бью
-      const focus = units.filter(a => a.alive && a.team === u.team && a !== u && a.priorityId === f.id).length;
-      s += Math.min(focus, 2) * 16;                                         // сходимся на общей цели — строй, а не дуэли
-      if (u.trait === 'smart') {                                            // умный видит на слой глубже
-        if (Math.abs(angDiff(f.face, angTo(f, u))) > coneHalf(f)) s += 34;  // он нас не видит — заходим во фланг
-        s += (f.max - f.hp) * 0.7;                                          // добиваем раненого
-        if (f.type === 'archer') s += 20;                                   // стрелок опаснее — вырезаем первым
-      } else {
-        s += (f.max - f.hp) * 0.25;                                         // раненого добить хочет любой, но слабее
-      }
-      if (s > bs) { bs = s; best = f; }
-    }
+    for (const f of foes) { const s = targetScore(u, f); if (s > bs) { bs = s; best = f; } }
+    // Не бросаем текущую цель, пока новая не станет ЗАМЕТНО лучше. Без этого боец каждый ход передумывает
+    // и вместо боя бегает туда-сюда между двумя почти равными вариантами.
+    const cur = units.find(x => x.id === u.priorityId && x.alive && x.team !== u.team);
+    if (cur && best !== cur && bs < targetScore(u, cur) + 30) return cur;
     return best;
   }
   // Стрелок идёт не «на цель», а на позицию за союзником-щитом — это тоже полноценное действие
