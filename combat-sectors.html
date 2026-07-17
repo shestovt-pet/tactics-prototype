@@ -58,6 +58,7 @@
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
   const CONE_MIN = 0.16, CONE_MAX = 1.08, CONE_R = 190, CONE_R_MIN = 0.42, TURN_RATE = 3.4, MOVE_COST = 0.10, TURN_COST = 10, COUNTER_COST = 12, BREATHER = 42, MOVE_BUDGET = 300;
   const BACK_COST = 2.6;   // движение спиной вперёд — во столько раз дороже (вбок — промежуточно)
+  const TRACK_RATE = 1.5;  // пассивное слежение за целью: бесплатно, но медленно (рад/сек)
   const AMB_TURNCOST = 2, FLANK_MULT = 1.6, LUNGE = 12, RECOIL_K = 0.05, MOVE_EASE = 8, ROLL_EASE = 16, STANDOFF = 50, FOOT_ACCEL = 2.6, CIRCLE_RATE = 0.4;
   const KITE = 185, MELEE_PANIC = 120;   // стрелок держит дистанцию; ближе MELEE_PANIC — рвёт её
   // ---- Геометрия поля: валуны, которые нельзя пройти и сквозь которые не видно ----
@@ -326,6 +327,12 @@
   // Ближний враг, оказавшийся за спиной (вне конуса) — от него надо срочно уходить
   function rearThreat(u) { let worst = null, wd = coneHalf(u) + 0.2; for (const f of foesOf(u)) { if (dist(u, f) < 82) { const dev = Math.abs(angDiff(u.face, angTo(u, f))); if (dev > wd) { wd = dev; worst = f; } } } return worst; }
   function faceTo(u, ang, costs) { faceToward(u, u.x + Math.cos(ang) * 40, u.y + Math.sin(ang) * 40, costs); }
+  // Пассивное слежение: голова сама ведёт цель — бесплатно, но медленно. Резко обернуться так нельзя — это уже осознанный доворот, и он платный.
+  function faceTrack(u, ang, dt) {
+    const diff = angDiff(u.face, ang), need = Math.abs(diff);
+    if (need < 0.005) return;
+    u.face += Math.sign(diff) * Math.min(need, TRACK_RATE * dt);
+  }
   const clampX = x => Math.max(18, Math.min(cv.width - 18, x)), clampY = y => Math.max(18, Math.min(cv.height - 18, y));
   // Союзник-щит: тот, кто лучше всех перекрывает стрелку линию до цели
   function screenFor(u, p) {
@@ -350,7 +357,7 @@
   // Плавная непрерывная «работа ног»: держим дистанцию, кружим, не подставляем спину
   function footwork(u, dt) {
     const p = priorityOf(u); if (!p) return;
-    if (u.att > 0) faceTo(u, threatDir(u), true);
+    faceTrack(u, threatDir(u), dt);   // бесплатно и медленно — за это не платим
     const tr = TRAITS[u.trait], acc = FOOT_ACCEL * (tr.footMult || 1);   // ловкий реагирует заметно живее
     if (dist(u, p) > (u.type === 'archer' ? ABIL.shot.range : CONE_R) + 40) return;
     let tx, ty;
