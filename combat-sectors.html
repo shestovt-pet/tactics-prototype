@@ -62,7 +62,7 @@
   // Трейты: свои действия даются дешевле; умный — шире конус и больше запас внимания
   const TRAITS = {
     strong: { key:'strong', label:'Сильный', labelF:'Сильная', mark:'С', col:'#ff9f6b', cheap:['heavy','aoe'],         mult:0.55 },
-    agile:  { key:'agile',  label:'Ловкий',  labelF:'Ловкая',  mark:'Л', col:'#8fe3ff', cheap:['quick','roll','shot'], mult:0.55, moveMult:0.55 },
+    agile:  { key:'agile',  label:'Ловкий',  labelF:'Ловкая',  mark:'Л', col:'#8fe3ff', cheap:['quick','roll','shot'], mult:0.55, moveMult:0.32, footMult:2.2, counterMult:0.45 },
     smart:  { key:'smart',  label:'Умный',   labelF:'Умная',   mark:'У', col:'#c9a2ff', cheap:[],                      mult:1, coneBonus:0.26, attBonus:45 },
   };
   const TKEYS = ['strong','agile','smart'];
@@ -186,8 +186,9 @@
       else if (flank) floater(t.x, t.y - 44, 'с фланга!', '#ff5c5c', 15);
       if (ab.setPrio) a.priorityId = t.id;
       if (ab.aggro) t.priorityId = a.id;
-      if (!ab.noCounter && !isCounter && !flank && t.alive && sees(t, a) && t.att >= COUNTER_COST && dist(t, a) <= 58) {
-        t.att -= COUNTER_COST;
+      const cc = Math.round(COUNTER_COST * (TRAITS[t.trait].counterMult || 1));   // ловкий отвечает охотнее и дешевле
+      if (!ab.noCounter && !isCounter && !flank && t.alive && sees(t, a) && t.att >= cc && dist(t, a) <= 58) {
+        t.att -= cc;
         enqueue(`${t.name}: контратака!`, '#8fd7ff', a.x, a.y, () => { if (a.alive && t.alive) { faceToward(t, a.x, a.y, false); applyDamage(a, 8); t.face += t.hand * 0.25; const ca = angTo(t, a); a.ox += Math.cos(ca) * 9; a.oy += Math.sin(ca) * 9; t.ox += Math.cos(ca) * 5; t.oy += Math.sin(ca) * 5; shake = Math.max(shake, 8); bursts.push({ x: a.x + a.ox, y: a.y + a.oy, life: 1, flank: false }); } }, 0.5, 0.06);
       }
     }, ab.ticks * TICK_DUR, ab.frz);
@@ -259,20 +260,70 @@
   // Ближний враг, оказавшийся за спиной (вне конуса) — от него надо срочно уходить
   function rearThreat(u) { let worst = null, wd = coneHalf(u) + 0.2; for (const f of foesOf(u)) { if (dist(u, f) < 82) { const dev = Math.abs(angDiff(u.face, angTo(u, f))); if (dev > wd) { wd = dev; worst = f; } } } return worst; }
   function faceTo(u, ang, costs) { faceToward(u, u.x + Math.cos(ang) * 40, u.y + Math.sin(ang) * 40, costs); }
+  const clampX = x => Math.max(18, Math.min(cv.width - 18, x)), clampY = y => Math.max(18, Math.min(cv.height - 18, y));
+  // Союзник-щит: тот, кто лучше всех перекрывает стрелку линию до цели
+  function screenFor(u, p) {
+    const mates = units.filter(a => a.alive && a.team === u.team && a !== u && a.type !== 'archer');
+    if (!mates.length) return null;
+    let best = null, bs = -1e9;
+    for (const m of mates) {
+      const off = Math.abs(angDiff(angTo(p, u), angTo(p, m)));        // насколько союзник близок к линии «цель→стрелок»
+      const s = -off * 90 - Math.abs(dist(p, m) - STANDOFF) * 0.25 - dist(u, m) * 0.06;
+      if (s > bs) { bs = s; best = m; }
+    }
+    return best;
+  }
+  // Куда встать стрелку: ровно ЗА союзником-щитом по линии от цели. Нет щита — просто на дистанции от ближайшего.
+  function archerSpot(u, p) {
+    const n = nearestFoe(u);
+    if (n && dist(u, n) < MELEE_PANIC) { const away = angTo(n, u); return { x: clampX(n.x + Math.cos(away) * KITE), y: clampY(n.y + Math.sin(away) * KITE) }; }
+    const scr = screenFor(u, p);
+    if (scr) { const a = angTo(p, scr); return { x: clampX(scr.x + Math.cos(a) * 88), y: clampY(scr.y + Math.sin(a) * 88) }; }
+    const away = angTo(p, u); return { x: clampX(p.x + Math.cos(away) * KITE), y: clampY(p.y + Math.sin(away) * KITE) };
+  }
   // Плавная непрерывная «работа ног»: держим дистанцию, кружим, не подставляем спину
   function footwork(u, dt) {
     const p = priorityOf(u); if (!p) return;
     if (u.att > 0) faceTo(u, threatDir(u), true);
-    const want = u.type === 'archer' ? KITE : STANDOFF;
+    const tr = TRAITS[u.trait], acc = FOOT_ACCEL * (tr.footMult || 1);   // ловкий реагирует заметно живее
     if (dist(u, p) > (u.type === 'archer' ? ABIL.shot.range : CONE_R) + 40) return;
-    // Стрелок непрерывно пятится от ЛЮБОГО подошедшего ближе эффективной дистанции — это его главный инстинкт
-    if (u.type === 'archer') { const n = nearestFoe(u); if (n && dist(u, n) < KITE) {
-      const away = angTo(n, u), kx = Math.max(u.R, Math.min(cv.width - u.R, n.x + Math.cos(away) * KITE)), ky = Math.max(u.R, Math.min(cv.height - u.R, n.y + Math.sin(away) * KITE));
-      u.x += (kx - u.x) * Math.min(1, dt * FOOT_ACCEL * 1.6); u.y += (ky - u.y) * Math.min(1, dt * FOOT_ACCEL * 1.6); return; } }
-    const rear = rearThreat(u); let tx, ty;
-    if (rear) { const away = angTo(rear, u); tx = u.x + Math.cos(away) * 34; ty = u.y + Math.sin(away) * 34; }   // уходим из-под захода в спину
-    else { const a = Math.atan2(u.y - p.y, u.x - p.x) + u.hand * CIRCLE_RATE * dt; tx = p.x + Math.cos(a) * want; ty = p.y + Math.sin(a) * want; }
-    u.x += (tx - u.x) * Math.min(1, dt * FOOT_ACCEL); u.y += (ty - u.y) * Math.min(1, dt * FOOT_ACCEL);
+    let tx, ty;
+    if (u.type === 'archer') { const s = archerSpot(u, p); tx = s.x; ty = s.y; }   // стрелок: за спину союзника
+    else {
+      const rear = rearThreat(u);
+      if (rear) { const away = angTo(rear, u); tx = u.x + Math.cos(away) * 34; ty = u.y + Math.sin(away) * 34; }   // уходим из-под захода в спину
+      else {
+        const cur = Math.atan2(u.y - p.y, u.x - p.x);
+        // Умный кружит осмысленно — заходит цели в слепую зону; остальные просто кружат в сторону рабочей руки
+        const dir = u.trait === 'smart' ? (Math.sign(angDiff(cur, p.face + Math.PI)) || 1) * 1.5 : u.hand;
+        const a = cur + dir * CIRCLE_RATE * dt;
+        tx = p.x + Math.cos(a) * STANDOFF; ty = p.y + Math.sin(a) * STANDOFF;
+      }
+    }
+    u.x += (clampX(tx) - u.x) * Math.min(1, dt * acc); u.y += (clampY(ty) - u.y) * Math.min(1, dt * acc);
+  }
+  // Умный выбирает цель осмысленно: кто нас не видит, кто ранен, кто стрелок, кто ближе
+  function bestTargetFor(u) {
+    const foes = foesOf(u); if (!foes.length) return null;
+    let best = null, bs = -1e9;
+    for (const f of foes) {
+      let s = -dist(u, f) * 0.06;
+      if (Math.abs(angDiff(f.face, angTo(f, u))) > coneHalf(f)) s += 34;   // он нас не видит — заходим во фланг
+      s += (f.max - f.hp) * 0.7;                                            // добиваем раненого
+      if (f.type === 'archer') s += 20;                                     // стрелок опаснее — вырезаем первым
+      if (s > bs) { bs = s; best = f; }
+    }
+    return best;
+  }
+  // Стрелок идёт не «на цель», а на позицию за союзником-щитом — это тоже полноценное действие
+  function doTakePosition(u, p) {
+    const s = archerSpot(u, p), d = Math.hypot(s.x - u.x, s.y - u.y);
+    if (d < 12) { doRecover(u, ABIL.recover); return; }
+    const stride = Math.min(120, d), ang = Math.atan2(s.y - u.y, s.x - u.x);
+    const gx = clampX(u.x + Math.cos(ang) * stride), gy = clampY(u.y + Math.sin(ang) * stride);
+    enqueue(`${u.name}: занимает позицию`, u.team === 'A' ? '#ffd98a' : '#ffb0b0', u.x, u.y, () => {
+      if (!u.alive) return; u.mt = { x: gx, y: gy }; u.att = Math.max(0, u.att - stride * moveCostOf(u));
+    }, 3 * TICK_DUR, 0);
   }
   function aiAct(u, t) {
     if (u.att < costOf(u, ABIL.quick)) { doRecover(u, ABIL.recover); return; }
@@ -295,14 +346,16 @@
     setTimeout(() => {
       if (phase === 'over') return;
       faceTo(u, threatDir(u), true);
+      if (u.trait === 'smart') { const b = bestTargetFor(u); if (b && b.id !== u.priorityId) { u.priorityId = b.id; floater(u.x, u.y - 32, '⇢ ' + b.base, '#c9a2ff', 13); } }
       const t = priorityOf(u);
       if (!t) doRecover(u, ABIL.recover);
       else if (u.att < costOf(u, ABIL.quick)) doRecover(u, ABIL.recover);
       else if (u.type === 'archer') {
         const near = nearestFoe(u), dn = near ? dist(u, near) : 1e9;
-        if (dn < MELEE_PANIC) doRetreat(u, near);      // кто угодно подобрался вплотную — рвём дистанцию от НЕГО, а не от приоритета
-        else if (canShoot(u, t)) aiAct(u, t);          // цель в конусе — стреляет
-        else doAdvance(u, t);                          // далеко/не в конусе — подбирается на дистанцию выстрела
+        const s = archerSpot(u, t), offSpot = Math.hypot(s.x - u.x, s.y - u.y);
+        if (dn < MELEE_PANIC) doRetreat(u, near);      // кто угодно подобрался вплотную — рвём дистанцию от НЕГО
+        else if (canShoot(u, t) && offSpot < 70) aiAct(u, t);   // стоим за щитом и видим цель — стреляем
+        else doTakePosition(u, t);                     // иначе — уходим за союзника
       }
       else if (dist(u, t) <= ABIL.heavy.range + 8) aiAct(u, t);
       else doAdvance(u, t);
