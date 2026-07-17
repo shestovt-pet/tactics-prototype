@@ -418,5 +418,5 @@
     log('Секторный бой: приземлённый ближний бой, фланги, очередь событий.', '#ffcf4d');
     startRound();
   }
-  setCounts(); setAiButtons(); initBattle(); requestAnimationFrame(loop);
+  initBattle(); requestAnimationFrame(loop);   // syncCfg() вызывается внутри initBattle
 </script>
