@@ -348,7 +348,14 @@
     return Math.atan2(sy, sx);
   }
   // Ближний враг, оказавшийся за спиной (вне конуса) — от него надо срочно уходить
-  function rearThreat(u) { let worst = null, wd = coneHalf(u) + 0.2; for (const f of foesOf(u)) { if (dist(u, f) < 82) { const dev = Math.abs(angDiff(u.face, angTo(u, f))); if (dev > wd) { wd = dev; worst = f; } } } return worst; }
+  // Реагируем на заход в тыл заранее (165), а не когда уже бьют
+  function rearThreat(u) {
+    let worst = null, wd = coneHalf(u) + 0.2;
+    for (const f of foesOf(u)) {
+      if (dist(u, f) < 165) { const dev = Math.abs(angDiff(u.face, angTo(u, f))); if (dev > wd) { wd = dev; worst = f; } }
+    }
+    return worst;
+  }
   function faceTo(u, ang, costs) { faceToward(u, u.x + Math.cos(ang) * 40, u.y + Math.sin(ang) * 40, costs); }
   // Пассивное слежение: голова сама ведёт цель — бесплатно, но медленно. Резко обернуться так нельзя — это уже осознанный доворот, и он платный.
   function faceTrack(u, ang, dt) {
@@ -383,15 +390,23 @@
     if (dist(u, n) < th) { u._fleeing = true; return n; }
     u._fleeing = false; return null;
   }
+  // Позиция стрелка выбирается из кандидатов на дуге вокруг цели. Главное требование — с неё ВИДНО цель:
+  // раньше спот считался вслепую, ноги волокли стрелка за камень, оттуда стрелять было нельзя, и он ходил кругами.
   function archerSpot(u, p) {
     const n = archerFleeing(u);
     if (n) { const away = angTo(n, u); return { x: clampX(n.x + Math.cos(away) * KITE), y: clampY(n.y + Math.sin(away) * KITE) }; }
-    // За союзником — но так, чтобы до цели осталось не меньше KITE. Иначе, когда щит сцепился вплотную,
-    // стрелок покорно шёл за ним прямо в мясорубку.
-    const scr = screenFor(u, p);
-    if (scr) { const a = angTo(p, scr), back = Math.max(88, KITE - dist(p, scr));
-      return { x: clampX(scr.x + Math.cos(a) * back), y: clampY(scr.y + Math.sin(a) * back) }; }
-    const away = angTo(p, u); return { x: clampX(p.x + Math.cos(away) * KITE), y: clampY(p.y + Math.sin(away) * KITE) };
+    const scr = screenFor(u, p), base = angTo(p, u);
+    let best = null, bs = -1e9;
+    for (let k = -5; k <= 5; k++) {
+      const a = base + k * 0.26;
+      const c = { x: clampX(p.x + Math.cos(a) * KITE), y: clampY(p.y + Math.sin(a) * KITE) };
+      let s = -Math.hypot(c.x - u.x, c.y - u.y) * 0.45;              // ближе к нам — дешевле дойти
+      if (!segHitsObstacle(c.x, c.y, p.x, p.y)) s += 120;            // ГЛАВНОЕ: с этой точки реально можно выстрелить
+      for (const f of foesOf(u)) { const d = Math.hypot(c.x - f.x, c.y - f.y); if (d < MELEE_PANIC) s -= (MELEE_PANIC - d) * 0.9; }
+      if (scr) { const off = Math.abs(angDiff(angTo(p, c), angTo(p, scr))); s += Math.max(0, 55 - off * 70); }  // за щитом — хорошо, но не любой ценой
+      if (s > bs) { bs = s; best = c; }
+    }
+    return best || { x: clampX(p.x + Math.cos(base) * KITE), y: clampY(p.y + Math.sin(base) * KITE) };
   }
   // Плавная непрерывная «работа ног»: держим дистанцию, кружим, не подставляем спину
   function footwork(u, dt) {
@@ -424,6 +439,10 @@
   function targetScore(u, f) {
     let s = -dist(u, f) * 0.06;
     if (sees(u, f)) s += 14;                                              // кого вижу — того и бью
+    // Выжить важнее, чем добить: кто зашёл мне за спину — тот и есть главная цель. Без этого бойцы
+    // выстраиваются паровозиком (А гонится за Б, Б за В) и все дружно подставляют тыл.
+    const dev = Math.abs(angDiff(u.face, angTo(u, f))), df = dist(u, f);
+    if (dev > coneHalf(u) && df < 240) s += 70 * (1 - df / 240) + 25;
     const focus = units.filter(a => a.alive && a.team === u.team && a !== u && a.priorityId === f.id).length;
     s += Math.min(focus, 2) * 16;                                         // сходимся на общей цели — строй, а не дуэли
     if (u.trait === 'smart') {                                            // умный видит на слой глубже
