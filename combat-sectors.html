@@ -56,7 +56,8 @@
 
 <script>
   const cv = document.getElementById('c'), ctx = cv.getContext('2d');
-  const CONE_MIN = 0.30, CONE_MAX = 0.95, CONE_R = 150, TURN_RATE = 3.4, MOVE_COST = 0.18, TURN_COST = 10, COUNTER_COST = 12, BREATHER = 15, MOVE_BUDGET = 150;
+  const CONE_MIN = 0.16, CONE_MAX = 1.08, CONE_R = 190, CONE_R_MIN = 0.42, TURN_RATE = 3.4, MOVE_COST = 0.10, TURN_COST = 10, COUNTER_COST = 12, BREATHER = 42, MOVE_BUDGET = 300;
+  const BACK_COST = 2.6;   // движение спиной вперёд — во столько раз дороже (вбок — промежуточно)
   const AMB_TURNCOST = 2, FLANK_MULT = 1.6, LUNGE = 12, RECOIL_K = 0.05, MOVE_EASE = 8, ROLL_EASE = 16, STANDOFF = 50, FOOT_ACCEL = 2.6, CIRCLE_RATE = 0.4;
   const KITE = 185, MELEE_PANIC = 120;   // стрелок держит дистанцию; ближе MELEE_PANIC — рвёт её
   // ---- Геометрия поля: валуны, которые нельзя пройти и сквозь которые не видно ----
@@ -82,6 +83,29 @@
     return false;
   }
   const clearLine = (a, b) => !segHitsObstacle(a.x, a.y, b.x, b.y);
+  // Первый валун на пути отрезка — именно его надо обходить
+  function firstBlocking(ax, ay, bx, by, pad) {
+    let best = null, bd = 1e9;
+    for (const o of OBST) {
+      const dx = bx - ax, dy = by - ay, a = dx * dx + dy * dy; if (a < 1e-6) continue;
+      let t = -((ax - o.x) * dx + (ay - o.y) * dy) / a; t = Math.max(0, Math.min(1, t));
+      const cx = ax + dx * t - o.x, cy = ay + dy * t - o.y, rr = o.r + pad;
+      if (cx * cx + cy * cy < rr * rr) { const d = Math.hypot(o.x - ax, o.y - ay); if (d < bd) { bd = d; best = o; } }
+    }
+    return best;
+  }
+  // Не упираться в камень, а обтекать его: если цель за валуном — идём по касательной с той стороны, где цель
+  function steerAround(u, tx, ty) {
+    const o = firstBlocking(u.x, u.y, tx, ty, u.R + 6);
+    if (!o) return { x: tx, y: ty };
+    const d = Math.hypot(o.x - u.x, o.y - u.y), need = o.r + u.R + 12;
+    const toO = Math.atan2(o.y - u.y, o.x - u.x), toT = Math.atan2(ty - u.y, tx - u.x);
+    const side = Math.sign(angDiff(toO, toT)) || 1;                       // обходим с той стороны, куда нам надо
+    const spread = Math.asin(Math.min(0.999, need / Math.max(need, d)));  // угловой радиус камня
+    const tang = toO + side * (spread + 0.22);
+    const reach = Math.max(70, Math.min(d + o.r, Math.hypot(tx - u.x, ty - u.y)));
+    return { x: u.x + Math.cos(tang) * reach, y: u.y + Math.sin(tang) * reach };
+  }
   // Никто не стоит внутри камня: выталкиваем наружу по нормали — так бойцы естественно обтекают геометрию
   function resolveObstacles() {
     for (const u of units) {
@@ -103,6 +127,11 @@
   const TKEYS = ['strong','agile','smart'];
   function costOf(u, ab) { if (!ab.cost) return 0; const t = TRAITS[u.trait]; return Math.round(ab.cost * (t && t.cheap.includes(ab.id) ? t.mult : 1)); }
   function moveCostOf(u) { const t = TRAITS[u.trait]; return MOVE_COST * (t && t.moveMult ? t.moveMult : 1); }
+  // Идти спиной вперёд дорого: цена растёт с отклонением направления шага от взгляда (вперёд ×1, вбок ×1.8, спиной ×2.6)
+  function dirCostMult(u, ang) { return 1 + (BACK_COST - 1) * (Math.abs(angDiff(u.face, ang)) / Math.PI); }
+  function moveCostDir(u, ang) { return moveCostOf(u) * dirCostMult(u, ang); }
+  // Дальность взгляда тоже падает с внимательностью — выдохшийся не только смотрит уже, но и видит ближе
+  function coneRange(u) { return CONE_R * (CONE_R_MIN + (1 - CONE_R_MIN) * Math.max(0, Math.min(1, u.att / u.attMax))); }
   // Ширина сектора внимания пропорциональна остатку внимательности: выдохся — обзор сузился до туннельного. Умный видит шире.
   function coneHalf(u) { const t = TRAITS[u.trait], b = t && t.coneBonus ? t.coneBonus : 0;
     return Math.min(1.35, CONE_MIN + b + (CONE_MAX - CONE_MIN) * Math.max(0, Math.min(1, u.att / u.attMax))); }
@@ -157,7 +186,7 @@
   const foesOf = u => units.filter(x => x.alive && x.team !== u.team);
   function angTo(a, b) { return Math.atan2(b.y - a.y, b.x - a.x); }
   function angDiff(a, b) { return Math.atan2(Math.sin(b - a), Math.cos(b - a)); }
-  function sees(a, t) { return dist(a, t) <= CONE_R && Math.abs(angDiff(a.face, angTo(a, t))) <= coneHalf(a) && clearLine(a, t); }
+  function sees(a, t) { return dist(a, t) <= coneRange(a) && Math.abs(angDiff(a.face, angTo(a, t))) <= coneHalf(a) && clearLine(a, t); }
   // Видит ли стрелок цель для выстрела: дальше, но всё так же строго внутри конуса — и без камня на линии
   function canShoot(a, t) { return dist(a, t) <= ABIL.shot.range && Math.abs(angDiff(a.face, angTo(a, t))) <= coneHalf(a) && clearLine(a, t); }
   function nearestFoe(u) { return foesOf(u).reduce((p, c) => (!p || dist(u, c) < dist(u, p)) ? c : p, null); }
@@ -187,7 +216,9 @@
   function groundStep(dt) {
     for (const u of units) {
       if (!u.alive) continue;
-      if (u.mt) { const k = Math.min(1, dt * (u.phaseT > 0 ? ROLL_EASE : MOVE_EASE)); u.x += (u.mt.x - u.x) * k; u.y += (u.mt.y - u.y) * k; if (Math.hypot(u.mt.x - u.x, u.mt.y - u.y) < 3) u.mt = null; }
+      if (u.mt) { const k = Math.min(1, dt * (u.phaseT > 0 ? ROLL_EASE : MOVE_EASE));
+        const g = u.phaseT > 0 ? u.mt : steerAround(u, u.mt.x, u.mt.y);   // кувырок летит напрямую, шаг — обтекает камень
+        u.x += (g.x - u.x) * k; u.y += (g.y - u.y) * k; if (Math.hypot(u.mt.x - u.x, u.mt.y - u.y) < 3) u.mt = null; }
       u.ox += (0 - u.ox) * Math.min(1, dt * 9); u.oy += (0 - u.oy) * Math.min(1, dt * 9);   // клинч возвращается к позиции
     }
     for (let it = 0; it < 3; it++) for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length; j++) { const a = units[i], b = units[j]; if (!a.alive || !b.alive || a.phaseT > 0 || b.phaseT > 0) continue; const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.R + b.R + 3; if (d > 0.001 && d < min) { const pp = (min - d) / 2, ux = dx / d, uy = dy / d; a.x -= ux * pp; a.y -= uy * pp; b.x += ux * pp; b.y += uy * pp; } else if (d <= 0.001) { a.x -= 1; b.x += 1; } }
@@ -253,11 +284,11 @@
   }
   // Стрелок разрывает дистанцию — это тоже полноценное действие со своей ценой в тиках
   function doRetreat(u, p) {
-    const ang = angTo(p, u), stride = Math.min(110, Math.max(30, KITE - dist(u, p)));
+    const ang = angTo(p, u), stride = Math.min(180, Math.max(40, KITE - dist(u, p)));   // отход спиной — дорогой, см. moveCostDir
     const gx = Math.max(u.R, Math.min(cv.width - u.R, u.x + Math.cos(ang) * stride));
     const gy = Math.max(u.R, Math.min(cv.height - u.R, u.y + Math.sin(ang) * stride));
     enqueue(`${u.name}: разрывает дистанцию`, '#c9d2ff', u.x, u.y, () => {
-      if (!u.alive) return; u.mt = { x: gx, y: gy }; u.att = Math.max(0, u.att - stride * moveCostOf(u));
+      if (!u.alive) return; u.mt = { x: gx, y: gy }; u.att = Math.max(0, u.att - stride * moveCostDir(u, ang));
     }, 2 * TICK_DUR, 0);
   }
   function doRecover(a, ab) { enqueue(`${a.name}: перевёл дух +${ab.restore}`, '#8fe3c0', a.x, a.y, () => { a.att = Math.min(a.attMax, a.att + ab.restore); }, ab.ticks * TICK_DUR, 0); }
@@ -335,7 +366,8 @@
         tx = p.x + Math.cos(a) * STANDOFF; ty = p.y + Math.sin(a) * STANDOFF;
       }
     }
-    u.x += (clampX(tx) - u.x) * Math.min(1, dt * acc); u.y += (clampY(ty) - u.y) * Math.min(1, dt * acc);
+    const g = steerAround(u, clampX(tx), clampY(ty));   // обтекаем валун, а не втыкаемся в него
+    u.x += (clampX(g.x) - u.x) * Math.min(1, dt * acc); u.y += (clampY(g.y) - u.y) * Math.min(1, dt * acc);
   }
   // Умный выбирает цель осмысленно: кто нас не видит, кто ранен, кто стрелок, кто ближе
   function bestTargetFor(u) {
@@ -354,10 +386,10 @@
   function doTakePosition(u, p) {
     const s = archerSpot(u, p), d = Math.hypot(s.x - u.x, s.y - u.y);
     if (d < 12) { doRecover(u, ABIL.recover); return; }
-    const stride = Math.min(120, d), ang = Math.atan2(s.y - u.y, s.x - u.x);
+    const stride = Math.min(190, d), ang = Math.atan2(s.y - u.y, s.x - u.x);
     const gx = clampX(u.x + Math.cos(ang) * stride), gy = clampY(u.y + Math.sin(ang) * stride);
     enqueue(`${u.name}: занимает позицию`, u.team === 'A' ? '#ffd98a' : '#ffb0b0', u.x, u.y, () => {
-      if (!u.alive) return; u.mt = { x: gx, y: gy }; u.att = Math.max(0, u.att - stride * moveCostOf(u));
+      if (!u.alive) return; u.mt = { x: gx, y: gy }; u.att = Math.max(0, u.att - stride * moveCostDir(u, ang));
     }, 3 * TICK_DUR, 0);
   }
   function aiAct(u, t) {
@@ -402,10 +434,10 @@
   function doAdvance(u, p) {
     const want = u.type === 'archer' ? KITE : STANDOFF, gap = dist(u, p) - want;
     if (gap <= 6) { doRecover(u, ABIL.recover); return; }   // уже на нужной дистанции — не топчется, а восстанавливает обзор
-    const ang = angTo(u, p), stride = Math.min(120, Math.max(20, gap));
+    const ang = angTo(u, p), stride = Math.min(190, Math.max(20, gap));
     const gx = u.x + Math.cos(ang) * stride, gy = u.y + Math.sin(ang) * stride;
     enqueue(`${u.name}: сближается`, u.team === 'A' ? '#ffd98a' : '#ffb0b0', u.x, u.y, () => {
-      if (!u.alive) return; u.mt = { x: gx, y: gy }; u.att = Math.max(0, u.att - stride * moveCostOf(u));
+      if (!u.alive) return; u.mt = { x: gx, y: gy }; u.att = Math.max(0, u.att - stride * moveCostDir(u, ang));
     }, 3 * TICK_DUR, 0);
   }
 
@@ -453,7 +485,7 @@
     }
     const foe = units.find(u => u.alive && u.team !== active.team && Math.hypot(u.x - mx, u.y - my) < 20);
     if (foe) { active.priorityId = foe.id; active.inCone.add(foe.id); faceToward(active, foe.x, foe.y, true); floater(active.x, active.y - 32, 'смотрю: ' + foe.name, '#ffcf4d', 13); updateStatus(); setAbils(true); return; }
-    if (active.att > 0 && active.moveLeft > 1) { const dx = mx - active.x, dy = my - active.y, d = Math.hypot(dx, dy) || 1, step = Math.min(d, active.moveLeft, active.att / moveCostOf(active)); active.mt = { x: active.x + dx / d * step, y: active.y + dy / d * step }; active.moveLeft -= step; active.att -= step * moveCostOf(active); const p = priorityOf(active); if (p) faceToward(active, p.x, p.y, true); updateStatus(); setAbils(true); }
+    if (active.att > 0 && active.moveLeft > 1) { const dx = mx - active.x, dy = my - active.y, d = Math.hypot(dx, dy) || 1, mang = Math.atan2(dy, dx), mc = moveCostDir(active, mang), step = Math.min(d, active.moveLeft, active.att / mc); active.mt = { x: active.x + dx / d * step, y: active.y + dy / d * step }; active.moveLeft -= step; active.att -= step * mc; const p = priorityOf(active); if (p) faceToward(active, p.x, p.y, true); updateStatus(); setAbils(true); }
   });
 
   // ---- Отрисовка ----
@@ -461,7 +493,7 @@
     if (!u.alive) return;
     let jx = 0, jy = 0; if (u.flinch > 0) { jx = (Math.random() - .5) * 7 * u.flinch; jy = (Math.random() - .5) * 7 * u.flinch; }
     const x = u.rx + jx, y = u.ry + jy, f = u.rface, R = u.R;
-    const ch = coneHalf(u), cr = u.type === 'archer' ? ABIL.shot.range * 0.62 : CONE_R;
+    const ch = coneHalf(u), cr = u.type === 'archer' ? ABIL.shot.range * 0.62 : coneRange(u);
     ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, cr, f - ch, f + ch); ctx.closePath();
     ctx.fillStyle = u.att > 0 ? (u.team === 'A' ? 'rgba(110,150,255,0.06)' : 'rgba(255,120,120,0.06)') : 'rgba(150,160,190,0.05)'; ctx.fill();
     ctx.strokeStyle = u.att > 0 ? (u.team === 'A' ? 'rgba(110,150,255,0.22)' : 'rgba(255,120,120,0.22)') : 'rgba(150,160,190,0.12)'; ctx.lineWidth = 1; ctx.stroke();
