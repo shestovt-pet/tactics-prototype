@@ -100,21 +100,25 @@
   // Обходим и камни, и своих. Врагов — не обходим: с ними как раз и надо сходиться вплотную.
   // Союзник у самой цели не считается помехой, иначе стрелок не смог бы встать вплотную за щит.
   function blockersFor(u, tx, ty) {
-    const list = OBST.slice();
+    const list = OBST.map((o, i) => ({ x: o.x, y: o.y, r: o.r, k: 'r' + i }));
     for (const m of units) {
       if (!m.alive || m === u || m.team !== u.team) continue;
       if (Math.hypot(m.x - tx, m.y - ty) < m.R + ALLY_SPACE) continue;   // он стоит там, куда мы идём — не помеха, разойдёмся вплотную
-      list.push({ x: m.x, y: m.y, r: m.R + ALLY_SPACE * 0.5 });
+      list.push({ x: m.x, y: m.y, r: m.R + ALLY_SPACE * 0.5, k: 'u' + m.id });
     }
     return list;
   }
   // Не упираться, а обтекать: если цель за препятствием — идём по касательной с той стороны, где цель
   function steerAround(u, tx, ty) {
     const o = firstBlockingIn(blockersFor(u, tx, ty), u.x, u.y, tx, ty, u.R + 6);
-    if (!o) return { x: tx, y: ty };
+    if (!o) { u._avoid = null; return { x: tx, y: ty }; }
     const d = Math.hypot(o.x - u.x, o.y - u.y), need = o.r + u.R + 12;
     const toO = Math.atan2(o.y - u.y, o.x - u.x), toT = Math.atan2(ty - u.y, tx - u.x);
-    const side = Math.sign(angDiff(toO, toT)) || 1;                       // обходим с той стороны, куда нам надо
+    // Сторону обхода выбираем ОДИН раз и держимся её, пока мешает то же препятствие.
+    // Иначе, когда камень ровно по курсу, знак прыгает каждый кадр — и боец бьётся в припадке на месте.
+    let side;
+    if (u._avoid && u._avoid.k === o.k) side = u._avoid.side;
+    else { side = Math.sign(angDiff(toO, toT)) || 1; u._avoid = { k: o.k, side }; }
     const spread = Math.asin(Math.min(0.999, need / Math.max(need, d)));  // угловой радиус камня
     const tang = toO + side * (spread + 0.22);
     const reach = Math.max(70, Math.min(d + o.r, Math.hypot(tx - u.x, ty - u.y)));
@@ -128,7 +132,9 @@
         let dx = u.x - o.x, dy = u.y - o.y, d = Math.hypot(dx, dy);
         const need = o.r + u.R;
         if (d < 0.001) { dx = 1; dy = 0; d = 1; }   // ровно в центре камня — направление вырождается, толкаем в любую сторону
-        if (d < need) { u.x = o.x + dx / d * need; u.y = o.y + dy / d * need; }
+        // Выталкиваем мягко, а не телепортом наружу каждый кадр — иначе на кромке камня боец дрожит
+        if (d < need) { const gx = o.x + dx / d * need, gy = o.y + dy / d * need, k = d < o.r ? 1 : 0.35;
+          u.x += (gx - u.x) * k; u.y += (gy - u.y) * k; }
       }
     }
   }
@@ -239,7 +245,7 @@
         u.x += (g.x - u.x) * k; u.y += (g.y - u.y) * k; if (Math.hypot(u.mt.x - u.x, u.mt.y - u.y) < 3) u.mt = null; }
       u.ox += (0 - u.ox) * Math.min(1, dt * 9); u.oy += (0 - u.oy) * Math.min(1, dt * 9);   // клинч возвращается к позиции
     }
-    for (let it = 0; it < 3; it++) for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length; j++) { const a = units[i], b = units[j]; if (!a.alive || !b.alive || a.phaseT > 0 || b.phaseT > 0) continue; const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.R + b.R + (a.team === b.team ? ALLY_SPACE : 3); if (d > 0.001 && d < min) { const pp = (min - d) / 2, ux = dx / d, uy = dy / d; a.x -= ux * pp; a.y -= uy * pp; b.x += ux * pp; b.y += uy * pp; } else if (d <= 0.001) { a.x -= 1; b.x += 1; } }
+    for (let it = 0; it < 3; it++) for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length; j++) { const a = units[i], b = units[j]; if (!a.alive || !b.alive || a.phaseT > 0 || b.phaseT > 0) continue; const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.R + b.R + (a.team === b.team ? ALLY_SPACE : 3); if (d > 0.001 && d < min) { const soft = a.team === b.team ? 0.16 : 0.5, pp = (min - d) / 2 * soft, ux = dx / d, uy = dy / d; a.x -= ux * pp; a.y -= uy * pp; b.x += ux * pp; b.y += uy * pp; } else if (d <= 0.001) { a.x -= 1; b.x += 1; } }
     for (const u of units) { if (!u.alive) continue; u.x = Math.max(u.R, Math.min(cv.width - u.R, u.x)); u.y = Math.max(u.R, Math.min(cv.height - u.R, u.y)); }
   }
 
@@ -379,7 +385,9 @@
     const p = priorityOf(u); if (!p) return;
     faceTrack(u, threatDir(u), dt);   // бесплатно и медленно — за это не платим
     const tr = TRAITS[u.trait], acc = FOOT_ACCEL * (tr.footMult || 1);   // ловкий реагирует заметно живее
-    if (dist(u, p) > (u.type === 'archer' ? ABIL.shot.range : CONE_R) + 40) return;
+    // Радиус, в котором боец реально танцует вокруг цели. Дальше он не столб: ведёт цель взглядом (выше)
+    // и переступает на месте — это делает отрисовка, см. «дыхание» в draw().
+    if (dist(u, p) > (u.type === 'archer' ? ABIL.shot.range + 60 : 340)) return;
     let tx, ty;
     if (u.type === 'archer') { const s = archerSpot(u, p); tx = s.x; ty = s.y; }   // стрелок: за спину союзника
     else {
@@ -595,7 +603,8 @@
     if (!busy()) for (const u of units) coneScan(u);
     for (const u of units) {
       let fwx = 0, fwy = 0;
-      if (u.alive && phase !== 'over') { const p = units.find(z => z.id === u.priorityId && z.alive); if (p && dist(u, p) < CONE_R + 30) { fwx = Math.sin(now / 240 + u.id * 2) * 2; fwy = Math.cos(now / 300 + u.id) * 1.6; } }
+      // Переступание на месте: живёт КАЖДЫЙ живой боец, а не только тот, кто рядом с целью — иначе дальние выглядят столбами
+      if (u.alive && phase !== 'over') { const k = busy() ? 1.35 : 1; fwx = Math.sin(now / 210 + u.id * 2) * 3.4 * k; fwy = Math.cos(now / 260 + u.id * 1.7) * 2.6 * k; }
       u.rx = u.x + u.ox + fwx; u.ry = u.y + u.oy + fwy;
       u.rface += angDiff(u.rface, u.face) * Math.min(1, dtReal * TURN_RATE);
       if (u.flinch > 0) u.flinch = Math.max(0, u.flinch - dtReal * 3); if (u.phaseT > 0) u.phaseT = Math.max(0, u.phaseT - dtReal);
